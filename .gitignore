@@ -1,0 +1,85 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# Python tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS files
+.DS_Store
+
+# Models/weights and large artifacts
+weights/
+*.pt
+!inference/best.pt
+
+# Logs
+*.log
+
+# testing
+test.png
+inference/test.py
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+.env
+
+# Orion runtime data
+*.db
+inference/uploads/
+inference/local_status.json
+
+# Local research/reference artifacts
+*.pdf
+*.docx
+Screenshot_*.jpg
+package-lock.json

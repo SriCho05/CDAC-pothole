@@ -1,0 +1,17 @@
+[Unit]
+Description=Pothole detection local Jetson camera runner
+After=multi-user.target nvargus-daemon.service
+Wants=nvargus-daemon.service
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/pothole-detection/inference
+EnvironmentFile=-/opt/pothole-detection/inference/.env
+ExecStart=/opt/pothole-detection/inference/.venv/bin/python -m local_runner --no-display
+Restart=on-failure
+RestartSec=5
+SupplementaryGroups=video dialout
+
+[Install]
+WantedBy=multi-user.target

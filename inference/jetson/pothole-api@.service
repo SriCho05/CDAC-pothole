@@ -1,0 +1,16 @@
+[Unit]
+Description=Pothole detection local API
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/pothole-detection/inference
+EnvironmentFile=-/opt/pothole-detection/inference/.env
+ExecStart=/opt/pothole-detection/inference/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+SupplementaryGroups=video dialout
+
+[Install]
+WantedBy=multi-user.target
