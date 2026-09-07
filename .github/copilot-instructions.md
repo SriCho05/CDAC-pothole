@@ -45,6 +45,19 @@ Do not add mobile clients, React/Node dashboards, training pipelines, x86 CUDA D
 9. **Use absolute/configurable paths.** Runtime paths are configured through environment variables such as `MODEL_PATH`, `DB_PATH`, `UPLOADS_DIR`, and `STATUS_PATH`.
 10. **Preserve the API/dashboard contract.** Keep `/health`, `/local-status`, `/potholes`, `/uploads/...`, and `/` dashboard behavior compatible unless deliberately versioning the API.
 
+## Future TensorRT roadmap
+
+TensorRT must be tried in a later optimization phase, not assumed to work before the PyTorch baseline is stable.
+
+1. Capture representative road-camera frames and record the PyTorch baseline for accuracy, end-to-end latency, inference latency, FPS, memory, and temperature on the actual Orin Nano.
+2. Export `inference/best.pt` to a TensorRT FP16 engine on the target Jetson or a demonstrably compatible JetPack environment.
+3. Run the same validation frames through PyTorch and TensorRT. Check missed potholes, false positives, bounding boxes, confidence behavior, and class mapping before accepting the engine.
+4. Compare sustained real-camera performance, not synthetic or theoretical projections. Include startup time, dropped frames, thermal behavior, and storage/API behavior.
+5. Only after FP16 is accurate and stable, investigate INT8 with a representative calibration dataset. Document calibration details and repeat the accuracy comparison.
+6. Keep `best.pt` as the fallback/debug model and make the TensorRT engine selectable through configuration. Never commit a generated engine unless its JetPack, Jetson model, TensorRT version, precision, and calibration provenance are documented.
+
+Do not claim TensorRT speedups or accuracy until the tests have been run on the physical Orin Nano.
+
 ## Camera configuration
 
 Important environment variables:
