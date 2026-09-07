@@ -1,0 +1,111 @@
+POTHOLE DETECTION PERFORMANCE TEST REPORT
+=========================================
+Date: 2026-09-07
+Target: Jetson Orin Nano
+Test type: Camera-free synthetic input
+
+1. TEST CONFIGURATION
+---------------------
+Model: inference/best.pt
+Input: 1 x 3 x 640 x 640
+Input source: Deterministic synthetic image; no camera required
+PyTorch: NVIDIA JetPack-compatible torch 2.5.0a0+872d972e41.nv24.08
+Torchvision: 0.20.1a0+3ac97aa, built from source for the installed torch
+Ultralytics: 8.4.142
+TensorRT: 10.3.0
+CUDA device: Orin, compute capability 8.7
+TensorRT precision: FP16
+TensorRT builder workspace: 64 MiB
+TensorRT builder optimization level: 0
+
+The production model was not modified. TensorRT and ONNX files were generated
+under inference/tests/artifacts/ only.
+
+2. PYTORCH RESULTS
+------------------
+Warmup iterations: 10
+Measured iterations: 100
+Average latency: 46.3692 ms
+Standard deviation: 2.4970 ms
+Minimum latency: 41.0284 ms
+Maximum latency: 57.1216 ms
+Throughput: 21.5660 FPS
+Status: PASS
+
+3. TENSORRT ENGINE BUILD
+------------------------
+ONNX export: PASS
+ONNX validation: PASS, 233 graph nodes
+Engine build: PASS
+Engine build time: 49.3415 s
+Engine size: 29.2065 MiB
+Peak TensorRT builder CPU memory: approximately 1604 MiB
+Generated engine: inference/tests/artifacts/best_fp16.engine
+
+4. TENSORRT RESULTS WITH HOST/DEVICE TRANSFERS
+----------------------------------------------
+Warmup: 1000 ms
+Measured iterations: 100
+Mean latency: 25.8743 ms
+Median latency: 26.0276 ms
+P90 latency: 29.2494 ms
+P95 latency: 29.7471 ms
+P99 latency: 31.3134 ms
+Throughput: 39.0823 FPS
+H2D mean latency: 0.4558 ms
+D2H mean latency: 0.0157 ms
+Status: PASS
+
+5. TENSORRT ENGINE-ONLY RESULTS
+-------------------------------
+Warmup: 1000 ms
+Measured iterations: 100
+Mean latency: 27.8052 ms
+Median latency: 27.7012 ms
+P90 latency: 30.1689 ms
+P95 latency: 30.6943 ms
+P99 latency: 31.2327 ms
+Throughput: 35.9627 FPS
+Data transfers: disabled
+Status: PASS
+
+6. COMPARISON
+-------------
+Using the trtexec run with normal host/device transfers:
+
+PyTorch average latency: 46.3692 ms
+TensorRT mean latency: 25.8743 ms
+Latency reduction: 44.20 percent
+Throughput increase: 81.21 percent (21.5660 FPS to 39.0823 FPS)
+Approximate FPS ratio: 1.81x
+
+The TensorRT number is not a fully equivalent application-level measurement.
+The PyTorch benchmark uses Ultralytics prediction, including image preprocessing
+and result postprocessing. trtexec measures the exported neural network and its
+host/device transfers, but does not run the application drawing, confidence
+filtering, event storage, GNSS, or camera loop. These results therefore indicate
+network execution potential, not final real-camera system FPS.
+
+7. FUNCTIONAL TESTS
+-------------------
+pytest inference/tests: 4 passed
+Python compilation: PASS
+ONNX structural validation: PASS
+TensorRT engine load/build: PASS
+TensorRT inference: PASS
+Production model checksum:
+af2ac6ce7bfec72e71643659ac946caf80ced84869e526a60135c457abfbb200
+
+8. ACCEPTANCE STATUS
+--------------------
+Camera-independent runtime and conversion tests: PASS
+Measured PyTorch CUDA baseline: PASS
+Measured TensorRT FP16 execution: PASS
+Accuracy equivalence against PyTorch: NOT TESTED
+Real-camera end-to-end performance: NOT TESTED
+Thermal endurance test: NOT TESTED
+
+Before selecting TensorRT for deployment, compare detections, confidence values,
+class mapping, and bounding boxes on representative road frames. Then repeat a
+sustained real-camera test including capture, preprocessing, postprocessing,
+storage, GNSS, dropped frames, temperature, and power behavior.

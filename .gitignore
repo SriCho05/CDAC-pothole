@@ -78,6 +78,9 @@ yarn-error.*
 inference/uploads/
 inference/local_status.json
 
+# Camera-free PyTorch/TensorRT comparison artifacts
+inference/tests/artifacts/
+
 # Local research/reference artifacts
 *.pdf
 *.docx
