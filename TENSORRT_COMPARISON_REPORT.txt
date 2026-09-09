@@ -1,0 +1,184 @@
+TENSORRT FP16 VS PYTORCH VIDEO INFERENCE REPORT
+================================================
+Date: 2026-09-09
+Project: CDAC-pothole
+Platform: NVIDIA Jetson Orin Nano, aarch64
+JetPack/L4T: R36.4.7
+GPU: cuda:0
+
+1. PURPOSE
+----------
+Test whether the existing TensorRT FP16 engine improves end-to-end video
+inference FPS compared with the PyTorch .pt model used previously.
+
+Previous pipeline:
+
+  Model: inference/best.pt
+  Runtime: Ultralytics with PyTorch on cuda:0
+  Input: 60 FPS video
+  Earlier reduced-size results:
+    320px: 22.3325 FPS
+    416px: 23.1023 FPS
+
+TensorRT pipeline:
+
+  Model: inference/tests/artifacts/best_fp16.engine
+  Runtime: Ultralytics TensorRT backend
+  Precision: FP16
+
+2. SOURCE VIDEO
+---------------
+File:
+
+  ../../demo 60fps.mp4
+
+Properties:
+
+  Resolution: 1920 x 1080
+  Source rate: 60.0525 FPS
+  Frames: 4,197
+  Duration: approximately 69.889 seconds
+
+3. RUNNER CHANGE
+----------------
+The runner originally called model.to(device) unconditionally. That method is
+valid for PyTorch .pt models but not for exported TensorRT engines. The runner
+was updated to call model.to(device) only for .pt files and to pass device to
+model.predict() for all model formats.
+
+This allowed the TensorRT engine to load and run through the same capture,
+postprocessing, event-storage, and status-update loop.
+
+4. FIRST TENSORRT ATTEMPT AT 320PX
+-----------------------------------
+Command configuration:
+
+  MODEL_PATH=tests/artifacts/best_fp16.engine
+  --image-size 320
+
+Result: FAIL before processing frames.
+
+Error:
+
+  AssertionError: input size torch.Size([1, 3, 320, 320]) not equal to
+  max model size (1, 3, 640, 640)
+
+Cause:
+
+The existing TensorRT engine is a fixed-shape engine built for 640 x 640 input.
+It cannot accept 320 x 320 input. A new TensorRT engine would need to be
+exported/built with a 320 x 320 shape to compare TensorRT at that resolution.
+
+5. VALID TEST A: TENSORRT FP16 AT 640PX
+---------------------------------------
+Command:
+
+  YOLO_DEVICE=cuda:0 \
+  MODEL_PATH=tests/artifacts/best_fp16.engine \
+  DB_PATH=/tmp/pothole-60fps-trt-640.db \
+  STATUS_PATH=/tmp/pothole-60fps-trt-640-status.json \
+  UPLOADS_DIR=/tmp/pothole-60fps-trt-640-uploads \
+  python local_runner.py \
+    --video '../../demo 60fps.mp4' \
+    --image-size 640 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 5
+
+Result:
+
+  Frames processed: 4,197
+  Processing time: 198.872 seconds
+  End-to-end throughput: 21.1040 FPS
+  Source rate: 60.0525 FPS
+  Source-rate percentage: 35.1426 percent
+  Saved pothole events: 37
+  Runner completion: PASS
+  Completion log: INFO:jetson_local_runner:Video finished
+  Final status: stopped
+
+TensorRT startup warning:
+
+  Using an engine plan file across different models of devices is not recommended
+
+The engine still loaded and completed successfully. For deployment, rebuild the
+engine on the target Jetson if the engine was created on another device.
+
+6. VALID TEST B: PREVIOUS PYTORCH .PT AT 640PX
+----------------------------------------------
+Command configuration:
+
+  YOLO_DEVICE=cuda:0
+  MODEL_PATH=best.pt
+  --image-size 640
+
+Result:
+
+  Frames processed: 4,197
+  Processing time: 202.279 seconds
+  End-to-end throughput: 20.7486 FPS
+  Source rate: 60.0525 FPS
+  Source-rate percentage: 34.5508 percent
+  Saved pothole events: 39
+  Runner completion: PASS
+  Completion log: INFO:jetson_local_runner:Video finished
+  Final status: stopped
+
+7. COMPARISON
+-------------
+                    TensorRT FP16       PyTorch .pt
+Input size          640 x 640            640 x 640
+Frames              4,197                4,197
+Time                 198.872 s            202.279 s
+Throughput           21.1040 FPS           20.7486 FPS
+60 FPS source rate   35.1426 percent       34.5508 percent
+Saved events         37                    39
+
+TensorRT was approximately 3.407 seconds faster for the complete 4,197-frame
+application run. The end-to-end throughput improvement was approximately 1.7
+percent:
+
+  (21.1040 - 20.7486) / 20.7486 * 100 = approximately 1.71 percent
+
+This is a modest application-level improvement because the measurement includes
+OpenCV capture, preprocessing, postprocessing, box drawing, status JSON writes,
+annotated image writes, and SQLite event storage. Earlier TensorRT benchmark
+numbers based only on trtexec neural-network execution were not equivalent to
+this full application loop.
+
+8. REAL-TIME CONCLUSION
+-----------------------
+The TensorRT FP16 engine is working, but this existing engine does not provide
+60 FPS real-time detection in the complete application:
+
+  Required for 60 FPS: one frame every approximately 16.65 ms
+  TensorRT application rate: approximately 47.38 ms per frame
+  Achieved rate: 21.10 FPS
+
+The earlier PyTorch 320px and 416px runs were faster at approximately 22.33 and
+23.10 FPS, but those models used smaller input sizes. This is not a direct
+TensorRT-versus-PyTorch resolution comparison.
+
+9. RECOMMENDED NEXT STEP
+------------------------
+Export/build a TensorRT FP16 engine specifically for 320 x 320, then benchmark
+that engine with --image-size 320. This will provide a fair comparison against
+the previous PyTorch 320px result.
+
+Possible additional optimizations:
+
+- Build the TensorRT engine on this exact Jetson.
+- Use a 256px TensorRT engine if small-pothole accuracy remains acceptable.
+- Set --latest-frame-interval to 0 or a higher value when measuring pure speed.
+- Move SQLite and annotated-image writes off the inference loop.
+- Skip stale frames when real-time responsiveness is more important than
+  processing every source frame.
+- Use Jetson performance mode and jetson_clocks during controlled benchmarks.
+
+10. FINAL STATUS
+----------------
+PASS: TensorRT engine loaded and processed the full video.
+PASS: Previous PyTorch pipeline processed the full video.
+PASS: Both runs exited cleanly at EOF.
+RESULT: TensorRT FP16 is slightly faster than PyTorch at 640px, but neither
+        configuration is real-time for a 60 FPS source.

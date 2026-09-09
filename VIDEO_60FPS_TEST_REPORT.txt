@@ -1,0 +1,199 @@
+60 FPS VIDEO INFERENCE TEST REPORT
+===================================
+Date: 2026-09-09
+Project: CDAC-pothole
+Platform: NVIDIA Jetson Orin Nano, aarch64
+JetPack/L4T: R36.4.7
+GPU device: cuda:0
+
+1. TEST OBJECTIVE
+-----------------
+Run the pothole detector against the 60 FPS demo video, reduce the inference
+resolution, measure complete application throughput, and compare a second
+inference size. The test includes video capture, GPU inference, postprocessing,
+drawing, status writes, saved detection images, and SQLite event storage.
+
+2. SOURCE VIDEO
+---------------
+File:
+
+  ../../demo 60fps.mp4
+
+Properties:
+
+  OpenCV opened: PASS
+  Resolution: 1920 x 1080
+  Reported source rate: 60.0525 FPS
+  Frame count: 4,197
+  Duration: approximately 69.889 seconds
+
+The video is located one directory above the repository. From inference/, the
+filename must be quoted because it contains a space:
+
+  --video '../../demo 60fps.mp4'
+
+3. TEST ENVIRONMENT
+-------------------
+Virtual environment:
+
+  inference/.venv
+
+Required runtime setup:
+
+  source .venv/bin/activate
+  export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:$LD_LIBRARY_PATH
+  export YOLO_DEVICE=cuda:0
+
+Each run used isolated temporary output locations:
+
+  DB_PATH=/tmp/pothole-60fps-<size>.db
+  STATUS_PATH=/tmp/pothole-60fps-<size>-status.json
+  UPLOADS_DIR=/tmp/pothole-60fps-<size>-uploads
+
+The normal repository database and uploads were not used by these tests.
+
+4. TEST A: 320PX INFERENCE
+--------------------------
+Command:
+
+  YOLO_DEVICE=cuda:0 \
+  DB_PATH=/tmp/pothole-60fps-320.db \
+  STATUS_PATH=/tmp/pothole-60fps-320-status.json \
+  UPLOADS_DIR=/tmp/pothole-60fps-320-uploads \
+  python local_runner.py \
+    --video '../../demo 60fps.mp4' \
+    --image-size 320 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 5
+
+Measured result:
+
+  Frames processed: 4,197
+  Wall-clock processing time: 187.932 seconds
+  End-to-end throughput: 22.3325 FPS
+  Source rate: 60.0525 FPS
+  Throughput as percentage of source rate: 37.1883 percent
+  Saved pothole events: 33
+  Generated output files: 35
+  Runner completion: PASS
+  Completion log: INFO:jetson_local_runner:Video finished
+  Final status: stopped
+
+5. TEST B: 416PX COMPARISON
+---------------------------
+Command:
+
+  YOLO_DEVICE=cuda:0 \
+  DB_PATH=/tmp/pothole-60fps-416.db \
+  STATUS_PATH=/tmp/pothole-60fps-416-status.json \
+  UPLOADS_DIR=/tmp/pothole-60fps-416-uploads \
+  python local_runner.py \
+    --video '../../demo 60fps.mp4' \
+    --image-size 416 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 5
+
+Measured result:
+
+  Frames processed: 4,197
+  Wall-clock processing time: 181.670 seconds
+  End-to-end throughput: 23.1023 FPS
+  Source rate: 60.0525 FPS
+  Throughput as percentage of source rate: 38.4702 percent
+  Saved pothole events: 34
+  Generated output files: 34
+  Runner completion: PASS
+  Completion log: INFO:jetson_local_runner:Video finished
+  Final status: stopped
+
+6. OUTPUT AND FUNCTIONAL CHECKS
+-------------------------------
+Both tests passed the following checks:
+
+- OpenCV opened the 60 FPS video.
+- The model ran on cuda:0.
+- All 4,197 frames were consumed until EOF.
+- The runner exited normally and logged Video finished.
+- The status file changed to stopped after completion.
+- Pothole detections were written to SQLite.
+- Annotated output images were written to the isolated upload directories.
+
+7. REAL-TIME ASSESSMENT
+------------------------
+The source video runs at approximately 60 FPS. Neither tested configuration is
+real-time at 60 FPS:
+
+  320px: 22.33 FPS, approximately 37.2 percent of source speed
+  416px: 23.10 FPS, approximately 38.5 percent of source speed
+
+The 416px run was slightly faster than the 320px run in this measurement. This
+is within expected run-to-run variation from GPU warm-up, scene content, and
+system load; it should not be interpreted as 416px being inherently faster.
+Both configurations process roughly one frame every 43-45 milliseconds, while a
+60 FPS source provides one frame every 16.65 milliseconds.
+
+The result is GPU-accelerated offline processing, not 60 FPS real-time detection.
+At 25 FPS, the earlier 320px test reached approximately 22.99 FPS and was near
+real-time. A 60 FPS camera or stream would require frame skipping, a smaller or
+optimized TensorRT model, batching/pipelining, or further application
+optimization to keep up with every frame.
+
+8. LIMITATIONS AND NEXT TESTS
+-----------------------------
+- Detection accuracy was not quantitatively compared between 320px and 416px.
+- Event image and SQLite writes remain on the inference loop.
+- Dashboard/latest-frame writes add application overhead.
+- The source video is finite, so stopped at EOF is expected.
+- GNSS was disabled with --gnss-port '' for this video-only test.
+
+Recommended next steps:
+
+- Compare detections and confidence values from 320px versus 416px.
+- Test --latest-frame-interval 0 or a higher interval for pure inference throughput.
+- Consider TensorRT FP16 deployment for lower latency.
+- Add frame skipping if real-time display is more important than processing every
+  source frame.
+- Measure a sustained CSI camera run separately from offline video throughput.
+
+9. RECTANGULAR INPUT TEST
+-------------------------
+Test date: 2026-09-09
+
+The runner was extended to accept rectangular PyTorch inference sizes using
+width x height notation. The command-line value 640x384 is converted to the
+height x width tuple (384, 640) for Ultralytics. This matches the source
+video's 16:9 aspect ratio more closely than a square input while avoiding image
+stretching.
+
+Command:
+
+  YOLO_DEVICE=cuda:0 \
+  DB_PATH=/tmp/pothole-60fps-rect.db \
+  STATUS_PATH=/tmp/pothole-60fps-rect-status.json \
+  UPLOADS_DIR=/tmp/pothole-60fps-rect-uploads \
+  python local_runner.py \
+    --video '../../demo 60fps.mp4' \
+    --image-size 640x384 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 5
+
+Result:
+
+  Frames processed: 4,197
+  Processing time: 180.407 seconds
+  End-to-end throughput: 23.2641 FPS
+  Source rate: 60.0525 FPS
+  Throughput as percentage of source rate: 38.7396 percent
+  Saved pothole events: 34
+  Generated output files: 35
+  Runner completion: PASS, logged "Video finished"
+  Final status: stopped
+
+This was slightly faster than the earlier 320px (22.3325 FPS) and 416px
+(23.1023 FPS) PyTorch runs, but it is still not real-time for a 60 FPS source.
+The result is an end-to-end application measurement and can vary with GPU
+warm-up and system load. The existing TensorRT engine remains fixed at 640x640;
+it cannot use 640x384 until a new rectangular TensorRT engine is exported.

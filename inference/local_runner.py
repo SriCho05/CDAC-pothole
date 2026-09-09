@@ -26,6 +26,13 @@ def env_bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).lower() in ("1", "true", "yes", "on")
 
 
+def parse_image_size(value: str) -> int | tuple[int, int]:
+    if "x" not in value.lower():
+        return int(value)
+    width, height = value.lower().split("x", 1)
+    return int(height), int(width)
+
+
 def save_event(db_path: str, uploads_dir: Path, frame, cv2, label: str, confidence: float, position) -> str:
     uploads_dir.mkdir(parents=True, exist_ok=True)
     filename = f"jetson_{int(time.time() * 1000)}.jpg"
@@ -69,7 +76,8 @@ def run(args: argparse.Namespace) -> None:
     model_path = os.getenv("MODEL_PATH", str(Path(__file__).with_name("best.pt")))
     device = requested_device or ("cuda:0" if torch.cuda.is_available() else "cpu")
     model = YOLO(model_path)
-    model.to(device)
+    if Path(model_path).suffix.lower() == ".pt":
+        model.to(device)
     capture = (open_video(cv2, args.video) if args.video else
                open_camera(cv2, args.camera_type, args.camera_device, args.width, args.height, args.fps))
     gnss = GnssReader(args.gnss_port, args.gnss_baud) if args.gnss_port else None
@@ -94,7 +102,9 @@ def run(args: argparse.Namespace) -> None:
                 logger.warning("Camera frame unavailable")
                 continue
             frame_started = time.perf_counter()
-            result = model.predict(frame, imgsz=args.image_size, conf=args.confidence, verbose=False)[0]
+            result = model.predict(
+                frame, imgsz=args.image_size, conf=args.confidence, device=device, verbose=False
+            )[0]
             potholes = []
             for box in result.boxes:
                 class_id = int(box.cls)
@@ -145,7 +155,7 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "1280")))
     parser.add_argument("--height", type=int, default=int(os.getenv("CAMERA_HEIGHT", "720")))
     parser.add_argument("--fps", type=int, default=int(os.getenv("CAMERA_FPS", "30")))
-    parser.add_argument("--image-size", type=int, default=int(os.getenv("IMAGE_SIZE", "640")))
+    parser.add_argument("--image-size", type=parse_image_size, default=parse_image_size(os.getenv("IMAGE_SIZE", "640")), help="Inference size, e.g. 640 or 640x384")
     parser.add_argument("--confidence", type=float, default=float(os.getenv("CONFIDENCE", "0.25")))
     parser.add_argument("--save-cooldown", type=float, default=float(os.getenv("SAVE_COOLDOWN", "5")))
     parser.add_argument("--latest-frame-interval", type=int, default=int(os.getenv("LATEST_FRAME_INTERVAL", "5")))
