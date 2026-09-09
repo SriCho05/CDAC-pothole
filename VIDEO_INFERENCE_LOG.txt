@@ -1,0 +1,298 @@
+POTHOLE VIDEO INFERENCE AND JETSON GPU SETUP LOG
+================================================
+Date: 2026-09-09
+Project: CDAC-pothole
+Platform: NVIDIA Jetson Orin Nano, aarch64
+JetPack/L4T: R36.4.7
+CUDA driver reported by nvidia-smi: CUDA 12.6
+Demo video: ../../demo.mp4 when launched from inference/
+
+1. OBJECTIVE
+------------
+Replace camera input with the repository demo video so the pothole model can be
+validated without a CSI or USB camera. Then run the same inference through the
+FastAPI dashboard and determine whether the video processing is real time.
+
+2. CODE CHANGES
+---------------
+The following runtime changes were made:
+
+- Added --video and VIDEO_PATH support to inference/local_runner.py.
+- Added open_video() to inference/camera.py using OpenCV VideoCapture.
+- Kept CSI and USB camera input as the default when --video is not supplied.
+- The video runner exits cleanly at end-of-file instead of repeatedly reporting
+  an unavailable camera frame.
+- Preserved the camera_type field in local_status.json for dashboard compatibility.
+- Added an input field to status output so the active source is visible.
+- Added a focused video opener test in inference/tests/test_jetson_helpers.py.
+- Added demo-video instructions to inference/README_ORION.md.
+- Added explicit YOLO_DEVICE handling. When YOLO_DEVICE=cpu is selected, CUDA
+  visibility is disabled before importing PyTorch/Ultralytics.
+- Suppressed the known incompatible CUDA driver warning only in explicit CPU mode.
+
+3. VIDEO PATH TESTING
+---------------------
+The demo file is located at:
+
+  /home/edgeai/Documents/Srikaanth CDAC/demo.mp4
+
+From the inference directory, the correct relative path is:
+
+  ../../demo.mp4
+
+The following OpenCV test succeeded:
+
+  Opened video: yes
+  First frame: yes
+  Frame shape: 720 x 1280 x 3
+  Video frame count: 692
+  Video FPS: 25
+  Video duration: approximately 27.7 seconds
+
+An earlier failure using demo.mp4 from the repository directory was caused by
+using the wrong working directory/path, not by a damaged video file.
+
+4. INITIAL PYTORCH PROBLEMS
+----------------------------
+The system Python initially had no pip and no torch:
+
+  /usr/bin/python3: No module named pip
+  ModuleNotFoundError: No module named 'torch'
+
+A project virtual environment was created:
+
+  inference/.venv
+
+The generic installed PyTorch was initially:
+
+  torch 2.14.0+cu130
+
+This was incompatible with the Jetson CUDA driver. CUDA initialization reported
+that the driver was too old (detected driver version 12060 for that wheel).
+
+The generic torch and torchvision packages were removed. NVIDIA's JetPack wheel
+was installed instead:
+
+  torch 2.5.0a0+872d972e41.nv24.08
+
+The first NVIDIA URL used was missing a build suffix and returned HTTP 404. The
+valid JetPack v61 wheel included:
+
+  17622132
+
+The final wheel URL used was:
+
+  https://developer.download.nvidia.com/compute/redist/jp/v61/pytorch/torch-2.5.0a0+872d972e41.nv24.08.17622132-cp310-cp310-linux_aarch64.whl
+
+5. cuSPARSELt PROBLEM AND FIX
+-----------------------------
+After installing the NVIDIA PyTorch wheel, importing torch failed with:
+
+  ImportError: libcusparseLt.so.0: cannot open shared object file
+
+The PyTorch installation instructions require cuSPARSELt for PyTorch releases
+from 24.06 onward. The installer script initially failed with CUDA_VERSION=12.6
+because that script only supports CUDA 12.1 through 12.4 for that package.
+
+The script was rerun with:
+
+  export CUDA_VERSION=12.4
+
+The archive downloaded and extracted successfully. The first copy attempt used
+an incorrect temporary directory. The actual extracted directory was:
+
+  /tmp/libcusparse_lt-linux-sbsa-0.5.2.1-archive
+
+The headers and libraries were copied with sudo into /usr/local/cuda, followed by
+sudo ldconfig. LD_LIBRARY_PATH was set to include:
+
+  /usr/local/cuda/lib64
+  /usr/local/cuda/targets/aarch64-linux/lib
+
+After this fix, PyTorch imported successfully and CUDA became available.
+
+6. NUMPY COMPATIBILITY WARNING
+-------------------------------
+The NVIDIA PyTorch wheel was compiled against NumPy 1.x, while NumPy 2.2.6 was
+initially installed. Importing torch produced a NumPy ABI warning and failed to
+initialize NumPy support.
+
+NumPy was downgraded to a 1.x release. The environment later reported:
+
+  NumPy 1.26.4
+
+This removed the NumPy ABI incompatibility.
+
+7. TORCHVISION INSTALLATION
+---------------------------
+Ultralytics requires torchvision. It was initially missing:
+
+  PackageNotFoundError: No package metadata was found for torchvision
+
+A generic PyPI torchvision package was avoided because it could be incompatible
+with NVIDIA's Jetson PyTorch build.
+
+The torchvision v0.20.0 source repository was cloned and built:
+
+  https://github.com/pytorch/vision.git
+  branch: v0.20.0
+
+The first build caused the Jetson Orin Nano to reboot, most likely because the
+parallel C++ compilation exhausted available memory.
+
+The board had approximately:
+
+  RAM: 7.4 GiB
+  Swap: 3.7 GiB
+
+The build was repeated with:
+
+  MAX_JOBS=1
+  CMAKE_BUILD_PARALLEL_LEVEL=1
+  CFLAGS=-O0
+  CXXFLAGS=-O0
+
+The second build completed successfully:
+
+  torchvision 0.20.0
+  wheel: linux_aarch64, cp310
+
+A verification attempt from /tmp/vision incorrectly imported the source tree and
+reported torchvision::nms errors. This was caused by the current directory
+shadowing the installed package. Running from inference/ avoids that issue.
+
+8. GPU VERIFICATION
+--------------------
+The successful environment verification was:
+
+  torch: 2.5.0a0+872d972e41.nv24.08
+  CUDA: True
+
+The required runtime environment variables are:
+
+  source inference/.venv/bin/activate
+  export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:$LD_LIBRARY_PATH
+
+9. GPU VIDEO INFERENCE COMMAND
+------------------------------
+From inference/:
+
+  YOLO_DEVICE=cuda:0 python local_runner.py \
+    --video ../../demo.mp4 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 1
+
+The command completed successfully multiple times and logged:
+
+  INFO:jetson_local_runner:Video finished
+
+This confirms that the full pipeline can open the demo video, run the model on
+the GPU, save detections, update status, and exit cleanly at end-of-file.
+
+10. DASHBOARD TEST
+------------------
+The dashboard API was started with:
+
+  export API_KEY=demo-key
+  uvicorn server:app --host 0.0.0.0 --port 8000
+
+Dashboard URL:
+
+  http://localhost:8000
+
+The API key must be entered in the dashboard as:
+
+  demo-key
+
+Observed dashboard behavior:
+
+- GET /local-status returned HTTP 200.
+- Latest annotated frames were served successfully.
+- GET /potholes returned HTTP 401 when the API key was not entered.
+- GET /potholes returned HTTP 200 when x-api-key: demo-key was supplied.
+- The dashboard displayed running while video frames were being processed.
+- It displayed stopped after the finite demo video reached EOF.
+
+The occasional Uvicorn errors saying response content was shorter or longer than
+Content-Length occurred because the dashboard requested latest.jpg while the
+runner was replacing that same file. They were transient file-update race errors;
+they did not stop inference.
+
+11. PERFORMANCE RESULTS
+14. 320PX PERFORMANCE TEST
+--------------------------
+Test command:
+
+  YOLO_DEVICE=cuda:0 python local_runner.py \
+    --video ../../demo.mp4 \
+    --image-size 320 \
+    --no-display \
+    --gnss-port '' \
+    --latest-frame-interval 5
+
+The test used temporary DB, status, and upload paths so it did not add results to
+the normal runtime data:
+
+  DB_PATH=/tmp/pothole-320b.db
+  STATUS_PATH=/tmp/pothole-320b-status.json
+  UPLOADS_DIR=/tmp/pothole-320b-uploads
+
+Result:
+
+  Video frames: 692
+  Source video FPS: 25
+  Source duration: approximately 27.7 seconds
+  Processing time: 30.1023 seconds
+  End-to-end throughput: 22.9883 FPS
+  Runner result: PASS, logged "Video finished"
+
+The 320px setting improved throughput compared with the earlier approximately
+14-20 FPS measurements at the default 640px inference size. It is near real-time
+but not fully real-time for this 25 FPS video because processing takes about 2.4
+seconds longer than the source duration. The lower image size may reduce accuracy,
+especially for small potholes, so detections should be compared against the 640px
+run before selecting this setting for deployment.
+application loop, including OpenCV capture, preprocessing, model inference,
+- One live sample reported 11.8 FPS and 51.4 ms for the latest frame.
+
+
+- Demo video input instead of camera.
+- NVIDIA Jetson GPU inference using cuda:0.
+- CUDA availability verification.
+- Ultralytics model loading and prediction.
+- Dashboard API and latest-frame display.
+- Pothole event storage.
+- Clean video EOF handling.
+
+Known limitations:
+
+- Current end-to-end throughput is below the 25 FPS source rate.
+- Video processing is not yet consistently real time.
+- CPU mode is available but much slower.
+- GNSS is disabled for demo testing with --gnss-port ''.
+- latest.jpg can be read while being replaced, causing occasional HTTP response
+  errors in the dashboard.
+- The demo video is finite, so the runner naturally changes to stopped at EOF.
+
+13. POSSIBLE PERFORMANCE IMPROVEMENTS
+-------------------------------------
+Test a smaller inference size:
+
+  --image-size 416
+
+or:
+
+  --image-size 320
+
+This should improve throughput but may reduce detection accuracy, especially for
+small potholes.
+
+Reduce latest-frame writes during testing:
+
+  --latest-frame-interval 5
+
+The runner could also be optimized by writing latest frames atomically, moving
+SQLite/event image writes off the critical inference loop, and reducing status JSON
+write frequency. These changes should be benchmarked against detection accuracy
+and event reliability before deployment.

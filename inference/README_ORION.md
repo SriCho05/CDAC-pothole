@@ -14,6 +14,16 @@ export GNSS_PORT=/dev/ttyUSB0
 python3 local_runner.py --camera-type csi --no-display
 ```
 
+To test the model with the repository's demo video instead of a camera, run from
+`inference/`:
+
+```bash
+python3 local_runner.py --video ../demo.mp4 --no-display --gnss-port ''
+```
+
+The runner processes the video until the last frame, then exits cleanly. Use
+`--display` to show the annotated frames while testing locally.
+
 In a second terminal:
 
 ```bash

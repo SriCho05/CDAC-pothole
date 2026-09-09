@@ -47,3 +47,11 @@ def open_camera(cv2, camera_type: str, device: str, width: int, height: int, fps
     if not capture.isOpened():
         raise RuntimeError(f"Unable to open {camera_type} camera: {device}")
     return capture
+
+
+def open_video(cv2, path: str):
+    """Open a local video file for camera-free inference testing."""
+    capture = cv2.VideoCapture(path)
+    if not capture.isOpened():
+        raise RuntimeError(f"Unable to open video: {path}")
+    return capture

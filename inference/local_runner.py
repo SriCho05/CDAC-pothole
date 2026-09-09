@@ -8,14 +8,15 @@ import logging
 import os
 import sqlite3
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from .camera import open_camera
+    from .camera import open_camera, open_video
     from .gnss import GnssReader
 except ImportError:  # Running directly as: python local_runner.py
-    from camera import open_camera
+    from camera import open_camera, open_video
     from gnss import GnssReader
 
 logger = logging.getLogger("jetson_local_runner")
@@ -52,15 +53,25 @@ def write_json(path: Path, payload: dict) -> None:
 
 
 def run(args: argparse.Namespace) -> None:
+    requested_device = os.getenv("YOLO_DEVICE")
+    if requested_device == "cpu":
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+        warnings.filterwarnings(
+            "ignore",
+            message=r"CUDA initialization: The NVIDIA driver on your system is too old.*",
+            category=UserWarning,
+        )
+
     import cv2
     import torch
     from ultralytics import YOLO
 
     model_path = os.getenv("MODEL_PATH", str(Path(__file__).with_name("best.pt")))
-    device = os.getenv("YOLO_DEVICE", "cuda:0" if torch.cuda.is_available() else "cpu")
+    device = requested_device or ("cuda:0" if torch.cuda.is_available() else "cpu")
     model = YOLO(model_path)
     model.to(device)
-    capture = open_camera(cv2, args.camera_type, args.camera_device, args.width, args.height, args.fps)
+    capture = (open_video(cv2, args.video) if args.video else
+               open_camera(cv2, args.camera_type, args.camera_device, args.width, args.height, args.fps))
     gnss = GnssReader(args.gnss_port, args.gnss_baud) if args.gnss_port else None
     if gnss:
         gnss.start()
@@ -77,6 +88,9 @@ def run(args: argparse.Namespace) -> None:
         while True:
             ok, frame = capture.read()
             if not ok:
+                if args.video:
+                    logger.info("Video finished")
+                    break
                 logger.warning("Camera frame unavailable")
                 continue
             frame_started = time.perf_counter()
@@ -103,7 +117,8 @@ def run(args: argparse.Namespace) -> None:
             if args.latest_frame_interval > 0 and frames % args.latest_frame_interval == 0:
                 cv2.imwrite(str(latest_frame_path), frame)
             write_json(status_path, {
-                "status": "running", "camera_type": args.camera_type, "device": device,
+                "status": "running", "camera_type": args.camera_type,
+                "input": args.video or args.camera_type, "device": device,
                 "frames": frames, "fps": round(frames / elapsed, 2),
                 "last_frame_ms": round((time.perf_counter() - frame_started) * 1000, 2),
                 "detections": len(potholes), "gnss_fix": position is not None,
@@ -123,7 +138,8 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Local Jetson camera pothole detector")
+    parser = argparse.ArgumentParser(description="Local pothole detector for a camera or video")
+    parser.add_argument("--video", default=os.getenv("VIDEO_PATH"), help="Video file to process instead of a camera")
     parser.add_argument("--camera-type", default=os.getenv("CAMERA_TYPE", "csi"), choices=("usb", "csi"))
     parser.add_argument("--camera-device", default=os.getenv("CAMERA_DEVICE", "0"))
     parser.add_argument("--width", type=int, default=int(os.getenv("CAMERA_WIDTH", "1280")))

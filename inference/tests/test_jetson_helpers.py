@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from camera import build_csi_pipeline
+from camera import open_video
 from gnss import parse_nmea
 
 
@@ -12,6 +13,24 @@ def test_csi_pipeline_uses_latest_frame_settings():
     assert "sensor-id=1" in pipeline
     assert "width=1920,height=1080,framerate=30/1" in pipeline
     assert "drop=true max-buffers=1" in pipeline
+
+
+def test_open_video_uses_file_path():
+    class FakeCapture:
+        def isOpened(self):
+            return True
+
+    class FakeCv2:
+        CAPTURED_PATH = None
+
+        @staticmethod
+        def VideoCapture(path):
+            FakeCv2.CAPTURED_PATH = path
+            return FakeCapture()
+
+    capture = open_video(FakeCv2, "../demo.mp4")
+    assert FakeCv2.CAPTURED_PATH == "../demo.mp4"
+    assert isinstance(capture, FakeCapture)
 
 
 def test_parse_gga_position():
