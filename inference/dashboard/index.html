@@ -27,7 +27,7 @@
     <div class="card"><div class="label">GNSS fix</div><div id="gnss" class="value">—</div></div>
   </section>
   <section class="content">
-    <div class="panel"><h2>Latest annotated frame</h2><img id="frame" class="frame" alt="Latest annotated camera frame"><div id="updated" class="footer">Waiting for runner status…</div></div>
+    <div class="panel"><h2>Live detection (annotated frames)</h2><img id="frame" class="frame" alt="Latest annotated frame from runner"><div id="updated" class="footer">Waiting for runner…</div></div>
     <div class="panel"><h2>Saved pothole events</h2><div class="scroll"><table><thead><tr><th>Time</th><th>Confidence</th><th>GPS</th><th>Image</th></tr></thead><tbody id="events"><tr><td colspan="4" class="empty">Enter the API key and refresh.</td></tr></tbody></table></div></div>
   </section>
   <section class="panel" style="margin-top:12px"><h2>GIS event map</h2><div id="map"></div><div id="map-message" class="footer">Waiting for GPS-tagged pothole events…</div></section>
@@ -55,17 +55,25 @@
     $('map-message').textContent = points.length ? `${points.length} GPS-tagged event${points.length === 1 ? '' : 's'} mapped.` : 'No GPS-tagged pothole events yet.';
     setTimeout(() => map.invalidateSize(), 50);
   }
+  function startVideoFeed() {
+    const frame = $('frame');
+    if (!frame.src) frame.src = '/video-feed';
+  }
   async function refresh() {
-    try {
-      const statusResponse = await fetch('/local-status?ts=' + Date.now());
-      const status = await statusResponse.json();
-      $('runner').textContent = status.status || 'offline'; $('runner').className = 'value ' + (status.status === 'running' ? 'ok' : 'bad');
-      $('fps').textContent = status.fps == null ? '—' : status.fps;
-      $('latency').textContent = status.last_frame_ms == null ? '—' : status.last_frame_ms + ' ms';
-      $('gnss').textContent = status.gnss_fix ? 'FIX' : 'NO FIX'; $('gnss').className = 'value ' + (status.gnss_fix ? 'ok' : 'bad');
-      $('updated').textContent = status.updated_at ? 'Updated ' + formatTime(status.updated_at) : 'Runner has not written status yet.';
-      if (status.latest_frame) $('frame').src = status.latest_frame + '?ts=' + Date.now();
-    } catch (error) { $('runner').textContent = 'API offline'; $('runner').className = 'value bad'; }
+    startVideoFeed();
+try {
+        const [statusResponse, videoStatsResponse] = await Promise.all([
+          fetch('/local-status?ts=' + Date.now()),
+          fetch('/video-feed-stats?ts=' + Date.now())
+        ]);
+        const status = await statusResponse.json();
+        const videoStats = await videoStatsResponse.json();
+        $('runner').textContent = status.status || 'offline'; $('runner').className = 'value ' + (status.status === 'running' ? 'ok' : 'bad');
+        $('fps').textContent = videoStats.fps == null ? '—' : videoStats.fps.toFixed(1);
+        $('latency').textContent = status.last_frame_ms == null ? '—' : status.last_frame_ms + ' ms';
+        $('gnss').textContent = status.gnss_fix ? 'FIX' : 'NO FIX'; $('gnss').className = 'value ' + (status.gnss_fix ? 'ok' : 'bad');
+        $('updated').textContent = status.updated_at ? 'Updated ' + formatTime(status.updated_at) : 'Runner has not written status yet.';
+      } catch (error) { $('runner').textContent = 'API offline'; $('runner').className = 'value bad'; }
     try {
       const response = await fetch('/potholes', {headers: apiHeaders()});
       if (!response.ok) throw new Error('API key required');

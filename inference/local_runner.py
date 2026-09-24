@@ -97,6 +97,10 @@ def run(args: argparse.Namespace) -> None:
             ok, frame = capture.read()
             if not ok:
                 if args.video:
+                    if args.loop:
+                        logger.info("Video finished, looping...")
+                        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        continue
                     logger.info("Video finished")
                     break
                 logger.warning("Camera frame unavailable")
@@ -162,6 +166,7 @@ def main() -> None:
     parser.add_argument("--gnss-port", default=os.getenv("GNSS_PORT", "/dev/ttyUSB0"))
     parser.add_argument("--gnss-baud", type=int, default=int(os.getenv("GNSS_BAUD", "9600")))
     parser.add_argument("--display", action=argparse.BooleanOptionalAction, default=env_bool("DISPLAY", True))
+    parser.add_argument("--loop", action=argparse.BooleanOptionalAction, default=env_bool("LOOP", False), help="Loop video file")
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     run(parser.parse_args())
 

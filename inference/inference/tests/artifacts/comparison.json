@@ -1,0 +1,12 @@
+{
+  "model": "best.pt",
+  "image_size": 640,
+  "device": "cuda:0",
+  "pytorch": {
+    "avg_time_ms": 40.671047359987824,
+    "std_time_ms": 1.6940380266962929,
+    "min_time_ms": 36.58633600025496,
+    "max_time_ms": 44.70809599979475,
+    "fps": 24.587515318914555
+  }
+}
