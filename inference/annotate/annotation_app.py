@@ -36,6 +36,8 @@ CLASS_PALETTE_BGR = [
     (255, 0, 0), (255, 0, 255), (0, 128, 255), (0, 200, 200), (128, 128, 128),
 ]
 
+IGNORE_COLOR_BGR = (128, 128, 128)  # gray for ignore regions
+
 
 def render_annotated(record: FrameRecord) -> bytes | None:
     """Draw detections on the source frame and return JPEG bytes."""
@@ -46,9 +48,13 @@ def render_annotated(record: FrameRecord) -> bytes | None:
         return None
     for detection in record.detections:
         x1, y1, x2, y2 = map(int, xywh_to_xyxy(detection.bbox_xywh))
-        color = CLASS_PALETTE_BGR[detection.class_id % len(CLASS_PALETTE_BGR)]
+        if detection.ignore:
+            color = IGNORE_COLOR_BGR
+            label = f"IGNORE {detection.confidence:.2f}"
+        else:
+            color = CLASS_PALETTE_BGR[detection.class_id % len(CLASS_PALETTE_BGR)]
+            label = f"{detection.class_name} {detection.confidence:.2f} {detection.severity}"
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-        label = f"{detection.class_name} {detection.confidence:.2f} {detection.severity}"
         cv2.putText(image, label, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
     ok, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])
     return buffer.tobytes() if ok else None
@@ -176,6 +182,7 @@ class Workspace:
     def export(self) -> dict:
         export_dir = self.root / "export"
         (export_dir / "labels").mkdir(parents=True, exist_ok=True)
+        (export_dir / "labels_ignore").mkdir(parents=True, exist_ok=True)
         (export_dir / "payloads").mkdir(parents=True, exist_ok=True)
         (export_dir / "annotated").mkdir(parents=True, exist_ok=True)
         (export_dir / "coco").mkdir(parents=True, exist_ok=True)
@@ -183,16 +190,28 @@ class Workspace:
         records = []
         labeled = 0
         annotated = 0
+        ignored = 0
         for frame_id in sorted(self.manifest):
             record = self.get_record(frame_id)
             records.append(record)
+            # Positive labels
             write_yolo_label(export_dir / "labels" / f"{frame_id}.txt", record)
+            # Ignore labels (negative examples)
+            ignore_record = FrameRecord(
+                frame_id=record.frame_id,
+                image_width=record.image_width,
+                image_height=record.image_height,
+                source_path=record.source_path,
+                detections=[d for d in record.detections if d.ignore],
+            )
+            write_yolo_label(export_dir / "labels_ignore" / f"{frame_id}.txt", ignore_record)
             payload = record.to_payload()
             (export_dir / "payloads" / f"{frame_id}.json").write_text(
                 json.dumps(payload, indent=2), encoding="utf-8"
             )
             payloads.append(payload)
             labeled += int((self.labels_dir / f"{frame_id}.txt").exists())
+            ignored += len([d for d in record.detections if d.ignore])
             rendered = render_annotated(record)
             if rendered is not None:
                 (export_dir / "annotated" / f"{frame_id}.jpg").write_bytes(rendered)
@@ -208,6 +227,7 @@ class Workspace:
             "labeled": labeled,
             "detections": sum(len(payload["detections"]) for payload in payloads),
             "annotated": annotated,
+            "ignored": ignored,
             "coco": str(export_dir / "coco" / "annotations.json"),
         }
 

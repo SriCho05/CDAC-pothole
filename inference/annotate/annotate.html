@@ -39,6 +39,7 @@
     .sev.level_1 { background:#123b2c; color:#62e6b4; }
     .sev.level_2 { background:#3d2f12; color:#ffb86b; }
     .sev.level_3 { background:#3d1414; color:#ff7a7a; }
+    .sev.ignore { background:#3a3a3a; color:#aaa; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .form-grid label { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
     .form-grid input, .form-grid select { width:100%; }
@@ -99,6 +100,9 @@
             <label>Confidence<input id="f-confidence" type="number" min="0" max="1" step="0.01"></label>
             <label>Depth (cm)<input id="f-depth" type="number" step="0.1" placeholder="optional"></label>
             <label>Area (sqcm)<input id="f-area" type="number" step="0.1" placeholder="optional"></label>
+            <label style="align-items:center; flex-direction:row; gap:6px;">
+              <input id="f-ignore" type="checkbox"> Ignore (false positive)
+            </label>
           </div>
           <button id="f-delete" class="secondary" style="margin-top:8px; width:100%">Delete detection</button>
         </div>
@@ -228,13 +232,16 @@ function renderCanvas() {
   ctx.drawImage(state.img, 0, 0, canvas.width, canvas.height);
   const drawBox = (b, selected) => {
     const [x, y, w, h] = b.bbox_xywh;
-    const color = selected ? '#ffffff' : classColor(b.class_id);
+    const isIgnore = b.ignore;
+    const color = selected ? '#ffffff' : (isIgnore ? '#888888' : classColor(b.class_id));
     ctx.strokeStyle = color;
     ctx.lineWidth = (selected ? 3 : 2) * s;
+    if (isIgnore && !selected) ctx.setLineDash([8, 6]);
     ctx.strokeRect(x * s, y * s, w * s, h * s);
+    ctx.setLineDash([]);
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.max(11, 12 * s)}px system-ui`;
-    const label = `${CLASS_NAMES[b.class_id] || b.class_id} ${Number(b.confidence).toFixed(2)}`;
+    const label = isIgnore ? `IGNORE ${Number(b.confidence).toFixed(2)}` : `${CLASS_NAMES[b.class_id] || b.class_id} ${Number(b.confidence).toFixed(2)}`;
     const ty = y * s - 6 * s > 12 ? y * s - 6 * s : y * s + 15 * s;
     ctx.fillText(label, x * s + 4 * s, ty);
     if (selected) {
@@ -258,7 +265,10 @@ function renderList() {
   state.boxes.forEach((b, i) => {
     const row = document.createElement('div');
     row.className = 'det-row' + (i === state.selected ? ' selected' : '');
-    row.innerHTML = `<span class="name">${i + 1}. ${CLASS_NAMES[b.class_id] || b.class_id}</span><span class="sev ${b.severity}">${b.severity}</span>`;
+    const labelText = b.ignore ? 'IGNORE' : (CLASS_NAMES[b.class_id] || b.class_id);
+    const sevClass = b.ignore ? 'ignore' : b.severity;
+    const sevText = b.ignore ? 'IGNORE' : b.severity;
+    row.innerHTML = `<span class="name">${i + 1}. ${labelText}</span><span class="sev ${sevClass}">${sevText}</span>`;
     row.onclick = () => { state.selected = i; renderAll(); };
     list.appendChild(row);
   });
@@ -271,6 +281,7 @@ function renderList() {
     $('f-confidence').value = b.confidence;
     $('f-depth').value = b.estimated_depth_cm ?? '';
     $('f-area').value = b.estimated_area_sqcm ?? '';
+    $('f-ignore').checked = !!b.ignore;
   } else {
     form.classList.add('hidden');
   }
@@ -304,7 +315,8 @@ async function saveLabels() {
   const payload = { detections: state.boxes.map(b => ({
     class_id: b.class_id, confidence: b.confidence,
     bbox_xywh: b.bbox_xywh.map(v => Math.round(v * 100) / 100),
-    severity: b.severity, estimated_depth_cm: b.estimated_depth_cm, estimated_area_sqcm: b.estimated_area_sqcm
+    severity: b.severity, estimated_depth_cm: b.estimated_depth_cm, estimated_area_sqcm: b.estimated_area_sqcm,
+    ignore: b.ignore
   }))};
   try {
     await api('/api/frames/' + encodeURIComponent(state.record.frame_id), 'POST', payload);
@@ -333,6 +345,7 @@ function bindUI() {
   $('f-confidence').onchange = e => applySelected(b => b.confidence = clamp(Number(e.target.value) || 0, 0, 1));
   $('f-depth').onchange = e => applySelected(b => b.estimated_depth_cm = e.target.value === '' ? null : Number(e.target.value));
   $('f-area').onchange = e => applySelected(b => b.estimated_area_sqcm = e.target.value === '' ? null : Number(e.target.value));
+  $('f-ignore').onchange = e => applySelected(b => b.ignore = e.target.checked);
   $('f-delete').onclick = () => { if (state.selected >= 0) { state.boxes.splice(state.selected, 1); state.selected = -1; state.dirty = true; renderAll(); } };
   ['t-lat','t-lon','t-alt','t-speed','t-heading','t-vib','e-lux','e-surface','e-weather'].forEach(id => {
     $(id).addEventListener('change', async () => {
@@ -383,7 +396,7 @@ function bindUI() {
   window.addEventListener('mouseup', () => {
     if (!state.drag) return;
     if (state.drag.type === 'create' && state.preview && state.preview[2] >= 4 && state.preview[3] >= 4) {
-      state.boxes.push({ class_id: 0, confidence: 1.0, bbox_xywh: state.preview, severity: 'level_1', estimated_depth_cm: null, estimated_area_sqcm: null });
+      state.boxes.push({ class_id: 0, confidence: 1.0, bbox_xywh: state.preview, severity: 'level_1', estimated_depth_cm: null, estimated_area_sqcm: null, ignore: false });
       state.selected = state.boxes.length - 1;
       state.dirty = true;
     }

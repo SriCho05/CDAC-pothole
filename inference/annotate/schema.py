@@ -38,6 +38,10 @@ def build_coco(records: list["FrameRecord"], category_offset: int = 1) -> dict:
         })
         for detection in record.detections:
             x, y, w, h = detection.bbox_xywh
+            if detection.ignore:
+                # Ignore regions: write as category 0 (background) with iscrowd=1
+                # or skip for standard detection training
+                continue
             annotations.append({
                 "id": annotation_id,
                 "image_id": image_id,
@@ -87,6 +91,7 @@ class Detection:
     severity: str = "level_1"
     estimated_depth_cm: float | None = None
     estimated_area_sqcm: float | None = None
+    ignore: bool = False  # true = negative example (don't detect here)
 
     def __post_init__(self) -> None:
         self.bbox_xywh = [float(value) for value in self.bbox_xywh]
@@ -104,6 +109,7 @@ class Detection:
         severity: str = "level_1",
         estimated_depth_cm: float | None = None,
         estimated_area_sqcm: float | None = None,
+        ignore: bool = False,
     ) -> "Detection":
         return cls(
             class_id=class_id,
@@ -112,6 +118,7 @@ class Detection:
             severity=severity,
             estimated_depth_cm=estimated_depth_cm,
             estimated_area_sqcm=estimated_area_sqcm,
+            ignore=ignore,
         )
 
     @classmethod
@@ -164,6 +171,7 @@ class Detection:
             "severity": self.severity,
             "estimated_depth_cm": self.estimated_depth_cm,
             "estimated_area_sqcm": self.estimated_area_sqcm,
+            "ignore": self.ignore,
         }
 
     @classmethod
@@ -175,6 +183,7 @@ class Detection:
             severity=data.get("severity", "level_1"),
             estimated_depth_cm=data.get("estimated_depth_cm"),
             estimated_area_sqcm=data.get("estimated_area_sqcm"),
+            ignore=data.get("ignore", False),
         )
 
 
