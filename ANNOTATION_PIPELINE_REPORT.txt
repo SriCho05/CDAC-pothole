@@ -1,0 +1,184 @@
+ROAD ANOMALY DETECTION & COCO/YOLO DATASET PIPELINE - IMPLEMENTATION REPORT
+===========================================================================
+
+Project:  CDAC edge road-anomaly survey (Jetson Orin Nano deployment)
+Phase:    1 - Pipeline validation, local anomaly detection, and dataset build
+Date:     2026-10-06
+Scope:    Local pre-annotation and reannotation tooling (inference/annotate/)
+
+---------------------------------------------------------------- 1. OBJECTIVE
+
+Stand up the dataset build path for the multimodal road-anomaly survey: run the
+existing YOLO pothole model locally over captured frames, then review and correct
+the results in a local annotation app, producing (a) YOLO training labels and
+(b) the C-DAC JSON detection payload format for client staging review. All
+processing stays on-host - no phone upload, no cloud inference, consistent with
+the Jetson-only deployment constraint.
+
+---------------------------------------------------------------- 2. ARCHITECTURE
+
+images / video
+      |
+      v
+preannotate.py  -- local YOLO inference -->  annotations/
+      |                                        |- manifest.json      (frame registry: path, dims, timestamp_us)
+      |                                        |- predictions.json   (rich detections: class, conf, severity, depth, area)
+      |                                        |- labels/*.txt       (5-column YOLO labels)
+      |                                        |- frames/            (video-only extracted frames)
+      v
+annotation_app.py + annotate.html  -- local FastAPI review UI (127.0.0.1:8765)
+      |   canvas box editor: draw / move / resize / delete
+      |   per-frame class, severity, confidence, depth, area
+      |   per-frame telemetry (GPS, speed, heading, IMU) + environment (lux, surface, weather)
+      v
+GET /api/export  -->  annotations/export/
+                        |- labels/<frame_id>.txt        (YOLO training labels)
+                        |- payloads/<frame_id>.json     (one C-DAC payload per frame)
+                        |- payloads.jsonl               (combined payload stream)
+                        |- annotated/<frame_id>.jpg     (frames with boxes drawn on them)
+                        |- coco/annotations.json        (COCO detection dataset)
+                        |- manifest.json                (frame registry)
+
+Source images are referenced in place (image-directory mode) or extracted to
+annotations/frames/ (video mode). Annotated JPGs are generated on demand by the
+/api/frames/{id}/annotated endpoint and in bulk by /api/export; the editable
+source of truth is always the label data, never the rendered JPG.
+
+---------------------------------------------------------------- 3. CLASS REGISTRY (10 CLASSES)
+
+  ID  Class                     ID  Class
+   0  pothole                   5  waterlogging
+   1  crack_transverse          6  missing_lane_marking
+   2  crack_longitudinal        7  edge_break
+   3  rutting                   8  manhole
+   4  debris                    9  road_barrier
+
+Matches the 8-12 class target in the dataset specification (potholes,
+transverse/longitudinal cracks, rutting, debris/obstructions,
+waterlogging/puddles, missing lane markings, edge breaks, manholes, road
+barriers).
+
+Severity is area-derived: level_1 < 400 cm^2 < level_2 < 1500 cm^2 < level_3,
+with manual override in the UI.
+
+---------------------------------------------------------------- 4. DATA FORMATS
+
+YOLO label (5-column, normalized, ultralytics-compatible):
+
+    <class_id> <center_x> <center_y> <width> <height>
+    0 0.429688 0.927083 0.109375 0.131944
+
+C-DAC detection payload (per frame):
+
+    {
+      "frame_id": "TARAMANI_ROAD_02_09_2026",
+      "timestamp_unix_us": 1787042200123456,
+      "telemetry": {
+        "latitude": 12.985612, "longitude": 80.241289, "altitude_m": 14.2,
+        "speed_kmh": 50, "heading_deg": 184.2, "imu_vibration_g": 0.18
+      },
+      "environment": { "lux": 42000, "surface": "asphalt_dry", "weather": "clear" },
+      "detections": [{
+        "class": "pothole", "severity": "level_2", "confidence": 0.91,
+        "bbox_rgb_xywh": [480, 620, 140, 95],
+        "bbox_thermal_xywh": null,
+        "estimated_depth_cm": 6.5, "estimated_area_sqcm": 820.0
+      }]
+    }
+
+bbox_thermal_xywh is reserved for the LWIR feed and is null in the RGB-only
+PoC stage. bbox_rgb_xywh is top-left [x, y, width, height] in source pixels.
+
+COCO export (export/coco/annotations.json) is generated from the same
+FrameRecord store: standard images/annotations/categories structure,
+top-left pixel bbox, 1-based category ids (class_id + 1), area = w*h,
+iscrowd = 0, plus score and severity preserved as extra keys. Pair it
+with the source images directory (file_name is the image basename) for
+pycocotools or COCO-format fine-tuning.
+
+Authority model: predictions.json is authoritative for rich attributes
+(severity, confidence, depth, area) because the 5-column YOLO label cannot
+store them; the label file is the fallback geometry source and the training
+artifact. All writes are atomic (temp file + rename).
+
+---------------------------------------------------------------- 5. PRE-ANNOTATION BEHAVIOR (preannotate.py)
+
+- Input: image directory (optionally --pattern '*.jpg,*.png') or video file
+  (--every N frame stride; frames extracted to annotations/frames/).
+- Frame identity: filename stem (deduplicated) or <video>_<NNNNNN> for video.
+- Timestamp: file mtime in microseconds; video frames add frame_index / fps.
+- Inference: local best.pt via Ultralytics YOLO, configurable --conf and
+  --image-size, device auto-selects cuda:0 when available.
+- Model classes map to the registry by name; unmapped classes are counted and
+  skipped rather than silently mislabeled.
+- Progress logged every 100 frames with fps; class histogram printed at the end.
+
+---------------------------------------------------------------- 6. REVIEW UI (annotate.html)
+
+- Dark, single-file canvas editor (no build step, no external dependencies).
+- Drag to draw, click to select, drag to move, corner handles to resize.
+- Detection list with class/severity/confidence/depth/area editing.
+- Telemetry and environment forms per frame (saved on change).
+- Keyboard: Left/Right navigate, Del remove, Esc deselect, Ctrl+S save.
+- Filters (all / labeled / unlabeled), progress bar, one-click dataset export.
+- Unsaved-changes guard on navigation and window close.
+
+---------------------------------------------------------------- 7. API SURFACE (LOCAL ONLY, DEFAULT 127.0.0.1:8765)
+
+  GET    /                              Annotator UI
+  GET    /api/classes                   Class registry + severity levels
+  GET    /api/frames?filter=all|labeled|unlabeled
+                                        Workspace summary + frame list
+  GET    /api/frames/{id}               Full frame record
+  GET    /api/frames/{id}/image         Source image
+  GET    /api/frames/{id}/annotated     Source image with boxes drawn on it
+  POST   /api/frames/{id}               Save corrected detections
+  POST   /api/frames/{id}/meta          Save telemetry/environment
+  DELETE /api/frames/{id}               Clear frame labels
+  GET    /api/export                    Build and report the export bundle
+
+---------------------------------------------------------------- 8. VERIFICATION PERFORMED
+
+- 11 unit tests (inference/tests/test_annotation.py): class registry
+  bidirectionality, xyxy<->xywh round-trip, YOLO label write/read, exact
+  C-DAC payload key set and values, record dict round-trip, severity
+  thresholds, box clamping, empty-label handling, atomic JSON writes,
+  annotated-image export, COCO dataset build.
+- End-to-end smoke test (inference/tests/smoke_annotation.py): 3 real frames
+  from the repo sample video -> pre-annotation -> API review -> detection save
+  -> metadata save -> export -> payload schema validation. PASSED.
+- Payload format check (inference/tests/check_payload_format.py): exported JSON
+  matches the C-DAC spec field-for-field.
+- Server boot check: python -m annotate.annotation_app serves /api/classes and
+  /api/frames correctly.
+
+Bug found and fixed during verification: get_record originally re-read the YOLO
+label file on every access, which reset severity/confidence/depth/area to
+defaults after any metadata save. Fixed by making predictions.json the
+authoritative record.
+
+---------------------------------------------------------------- 9. USAGE
+
+    cd inference
+    python -m annotate.preannotate --source /path/to/frames --out annotations
+    python -m annotate.annotation_app          # open http://127.0.0.1:8765
+    # review/correct frames, then click Export dataset
+
+Configuration: ANNOTATION_DIR, ANNOTATION_HOST, ANNOTATION_PORT (see
+inference/.env.example).
+
+---------------------------------------------------------------- 10. DATASET TARGETS AND NEXT STEPS
+
+Current tooling supports the dataset specification targets: 25,000-50,000
+labeled frames across 150-200 routes, with a reserved 2,000-3,000 frame
+calibration set for TensorRT INT8 (KL-divergence/entropy) - the export's
+manifest.json makes calibration-set carving trivial.
+
+Roadmap:
+1. Wire GNSS/IMU capture into collection so telemetry auto-fills instead of
+   manual entry.
+2. Add LWIR thermal frames and populate bbox_thermal_xywh for fused detection.
+3. Depth/area estimation heuristics from camera geometry to pre-fill
+   estimated_depth_cm and estimated_area_sqcm before human review.
+4. Feed the corrected export/labels/ into fine-tuning of the YOLO variant, then
+   TensorRT quantization per the existing Jetson roadmap.

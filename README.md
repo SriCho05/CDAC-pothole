@@ -67,3 +67,19 @@ See `inference/README_ORION.md` for CSI/USB camera setup, GNSS configuration, da
 - `GET /uploads/<file>` — saved and latest annotated frames.
 
 The runner performs all inference locally. The API does not accept remote image inference requests.
+
+## Local annotation & reannotation
+
+Build and correct the labeled dataset entirely on-host:
+
+```bash
+cd inference
+python -m annotate.preannotate --source /path/to/frames --out annotations
+python -m annotate.annotation_app            # http://127.0.0.1:8765
+```
+
+- `preannotate.py` runs the local YOLO model over an image directory (or video with `--every N`) and writes model pre-annotations to `annotations/predictions.json` plus initial YOLO labels in `annotations/labels/`.
+- The annotator UI reviews and corrects boxes, class (10 road-anomaly classes), severity, confidence, depth/area estimates, and per-frame telemetry/environment metadata.
+- `GET /api/export` (or the Export button) writes `annotations/export/` with YOLO `labels/`, per-frame C-DAC JSON payloads in `payloads/`, a combined `payloads.jsonl`, annotated frames in `annotated/`, and a COCO dataset in `coco/annotations.json` — ready for training and for client staging review.
+
+Class registry: pothole, crack_transverse, crack_longitudinal, rutting, debris, waterlogging, missing_lane_marking, edge_break, manhole, road_barrier. Severity levels are suggested from estimated area (level_1 < 400 cm² < level_2 < 1500 cm² < level_3).

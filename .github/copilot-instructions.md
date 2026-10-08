@@ -28,9 +28,22 @@ The Jetson is both the camera host and the inference host. Do not reintroduce a 
 - `inference/requirements-jetson.txt` — non-PyTorch Jetson dependencies.
 - `inference/.env.example` — deployment configuration template.
 - `benchmark_model.py` — local-device benchmark with CUDA synchronization.
+- `inference/annotate/` — local pre-annotation and reannotation tooling (dataset build only; no cloud, no training).
 - `inference/tests/` — hardware-independent helper tests.
 
 Do not add mobile clients, React/Node dashboards, training pipelines, x86 CUDA Dockerfiles, laptop-specific runtime code, or cloud inference unless the project owner explicitly changes the deployment target.
+
+## Local annotation tooling
+
+`inference/annotate/` is the dataset build path for the CDAC anomaly pipeline:
+
+- `preannotate.py` — batch-runs the local YOLO model over an image directory or video, writing `annotations/manifest.json`, `annotations/predictions.json`, and initial YOLO labels.
+- `annotation_app.py` + `annotate.html` — local FastAPI review UI (default `http://127.0.0.1:8765`) for correcting boxes, class, severity, confidence, depth/area, and telemetry/environment metadata.
+- `classes.py` — 10-class anomaly registry (pothole, cracks, rutting, debris, waterlogging, missing lane markings, edge breaks, manholes, road barriers) and severity thresholds.
+- `schema.py` — `FrameRecord`/`Detection` dataclasses that emit the C-DAC JSON payload (`frame_id`, `timestamp_unix_us`, `telemetry`, `environment`, `detections` with `bbox_rgb_xywh`) and read/write 5-column YOLO labels.
+- `GET /api/export` writes `annotations/export/` with YOLO labels, per-frame payload JSONs, a combined `payloads.jsonl`, annotated frames, and a COCO `coco/annotations.json`.
+
+Annotation workspaces and exports are generated data; never commit them.
 
 ## Runtime rules
 
