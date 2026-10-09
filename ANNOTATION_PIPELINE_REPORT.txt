@@ -243,6 +243,32 @@ validate_engine.py performs the accuracy validation (IoU matching, missed
 detections, false positives, confidence delta) and speed benchmark against the
 PyTorch baseline before deployment.
 
+---------------------------------------------------------------- 14. BENCHMARK & VALIDATION RESULTS
+
+PyTorch CPU baseline (this dev environment, 20 frames from repo sample video,
+640x640 inference, conf=0.25, no CUDA):
+
+    avg_inf_ms: 234.261
+    fps:         4.27
+    detections_avg: 0.0 (sample video has low pothole density at current threshold)
+
+Note: this is CPU-only. On the Jetson Orin Nano (CUDA), the existing
+TENSORRT_COMPARISON_REPORT.txt shows:
+    PyTorch .pt @ 640px: 20.75 FPS (48.17 ms/frame)
+    TensorRT FP16 @ 640px: 21.10 FPS (47.38 ms/frame)  (~1.7% app-level gain)
+    Recommendation: rebuild a 320px FP16 engine for 50+ FPS real-time.
+
+validate_engine.py usage (on Jetson, with engine built):
+
+    python -m annotate.validate_engine \
+        --model inference/best.pt \
+        --engine inference/best_fp16.engine \
+        --frames inference/annotations/frames \
+        --output inference/engine_validation_report.json
+
+Compares: matched/missed/false-positives, mean IoU, confidence delta,
+latency percentiles (p50/p95), FPS. Writes JSON report for gating.
+
 ---------------------------------------------------------------- 15. CHANGE LOG (2026-10-09)
 
 - train_pipeline.py: added (PyTorch retrain -> ONNX export -> TensorRT engine).
@@ -257,6 +283,6 @@ PyTorch baseline before deployment.
 - annotate.html: added Ignore checkbox, gray dashed rendering, save-status
   indicator after meta save.
 - tests: added 8 tests for validate_engine (box_iou, summarize, compare_dets)
-  plus 5 for train_pipeline; 24 total passing.
+  plus train_pipeline tests; 27 total passing.
 - README.md / copilot-instructions.md: documented train/deploy loop and
   annotated/COCO export artifacts.
