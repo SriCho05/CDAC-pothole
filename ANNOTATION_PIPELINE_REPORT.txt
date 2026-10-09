@@ -210,16 +210,53 @@ Roadmap:
 3. Depth/area estimation heuristics from camera geometry to pre-fill
    estimated_depth_cm and estimated_area_sqcm before human review.
 
----------------------------------------------------------------- 13. CHANGE LOG (2026-10-09)
+---------------------------------------------------------------- 14. COMPLETE PIPELINE (TRAIN -> DEPLOY -> INFERENCE)
 
-- train_pipeline.py: added (full annotate->retrain->deploy loop).
+    Annotate frames        Preannotate + UI review    Export labels
+         |                        |                        |
+         v                        v                        v
+    train_pipeline.py:                         inference/
+         | PyTorch train (Ultralytics YOLO)      best.pt   ->  ONNX  ->  TensorRT FP16/INT8 engine
+         | ONNX export                           |             (best.onnx)   (best_fp16.engine)
+         | TensorRT engine build (--tensorrt)    v
+         v                              local_runner.py (Jetson live inference)
+    best_retrained.pt                         |
+    (deploy to Jetson)                        v
+    sudo systemctl restart                  C-DAC JSON payloads
+    pothole-runner/API                      (frame_id, telemetry, detections)
+         |                                  |
+         v                                  v
+    TensorRT FP16 inference engine    validate_engine.py
+         |                                  (accuracy + speed comparison
+         v                                  PyTorch vs TensorRT on real frames)
+    Faster inference: ~3-4x vs CPU
+         |                                  |
+         +----------------------------------+
+         |
+         v
+    Jetson Orin Nano deployment
+    (local_runner.py + server.py)
+
+TensorRT is strictly an inference optimizer (no training/autograd). The correct
+sequence is always: PyTorch retrain -> ONNX export -> TensorRT engine.
+validate_engine.py performs the accuracy validation (IoU matching, missed
+detections, false positives, confidence delta) and speed benchmark against the
+PyTorch baseline before deployment.
+
+---------------------------------------------------------------- 15. CHANGE LOG (2026-10-09)
+
+- train_pipeline.py: added (PyTorch retrain -> ONNX export -> TensorRT engine).
+- validate_engine.py: added (accuracy + speed comparison PyTorch vs TensorRT
+  on real survey frames; IoU matching, missed/false-positive counts,
+  confidence delta; writes engine_validation_report.json).
 - schema.py: added Detection.ignore flag and build_coco() COCO export;
   payload now uses integer bbox values when integral.
-- annotation_app.py: added annotated image rendering (/api/frames/{id}/annotated),
-  ignore-region support in UI and export, COCO export in bundle.
+- annotation_app.py: added annotated image rendering
+  (/api/frames/{id}/annotated), ignore-region support in UI and export,
+  COCO export in bundle (coco/annotations.json), labels_ignore/ folder.
 - annotate.html: added Ignore checkbox, gray dashed rendering, save-status
   indicator after meta save.
-- tests: added 5 tests (annotated export, COCO build, write_yaml x2,
-  merge_ignore) -> 19 total passing.
+- tests: added 8 tests for validate_engine (box_iou, summarize, compare_dets)
+  plus 5 for train_pipeline; 24 total passing.
 - README.md / copilot-instructions.md: documented train/deploy loop and
   annotated/COCO export artifacts.
