@@ -35,13 +35,14 @@ Do not add mobile clients, React/Node dashboards, training pipelines, x86 CUDA D
 
 ## Local annotation tooling
 
-`inference/annotate/` is the dataset build path for the CDAC anomaly pipeline:
+`inference/annotate/` is the dataset build and retraining path for the CDAC anomaly pipeline:
 
 - `preannotate.py` — batch-runs the local YOLO model over an image directory or video, writing `annotations/manifest.json`, `annotations/predictions.json`, and initial YOLO labels.
-- `annotation_app.py` + `annotate.html` — local FastAPI review UI (default `http://127.0.0.1:8765`) for correcting boxes, class, severity, confidence, depth/area, and telemetry/environment metadata.
-- `classes.py` — 10-class anomaly registry (pothole, cracks, rutting, debris, waterlogging, missing lane markings, edge breaks, manholes, road barriers) and severity thresholds.
-- `schema.py` — `FrameRecord`/`Detection` dataclasses that emit the C-DAC JSON payload (`frame_id`, `timestamp_unix_us`, `telemetry`, `environment`, `detections` with `bbox_rgb_xywh`) and read/write 5-column YOLO labels.
-- `GET /api/export` writes `annotations/export/` with YOLO labels, per-frame payload JSONs, a combined `payloads.jsonl`, annotated frames, and a COCO `coco/annotations.json`.
+- `annotation_app.py` + `annotate.html` — local FastAPI review UI (default `http://127.0.0.1:8765`) for correcting boxes, class (10 road-anomaly classes), severity, confidence, depth/area, ignore regions, and telemetry/environment metadata.
+- `classes.py` — 10-class anomaly registry (pothole, cracks, rutting, debris, waterlogging, lane markings, edge breaks, manholes, barriers) and severity thresholds.
+- `schema.py` — `FrameRecord`/`Detection` dataclasses that emit the C-DAC JSON payload (`frame_id`, `timestamp_unix_us`, `telemetry`, `environment`, `detections` with `bbox_rgb_xywh`) and read/write 5-column YOLO labels; `build_coco()` for COCO export.
+- `train_pipeline.py` — reads the export bundle, writes `data.yaml`, optionally merges ignore regions into a background class, runs `yolo detect train`, exports ONNX, and builds a TensorRT engine.
+- `GET /api/export` writes `annotations/export/` with YOLO labels, per-frame payload JSONs, a combined `payloads.jsonl`, annotated frames, a COCO `coco/annotations.json`, and the frame `manifest.json`.
 
 Annotation workspaces and exports are generated data; never commit them.
 

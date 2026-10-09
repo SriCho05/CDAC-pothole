@@ -82,4 +82,14 @@ python -m annotate.annotation_app            # http://127.0.0.1:8765
 - The annotator UI reviews and corrects boxes, class (10 road-anomaly classes), severity, confidence, depth/area estimates, and per-frame telemetry/environment metadata.
 - `GET /api/export` (or the Export button) writes `annotations/export/` with YOLO `labels/`, per-frame C-DAC JSON payloads in `payloads/`, a combined `payloads.jsonl`, annotated frames in `annotated/`, and a COCO dataset in `coco/annotations.json` — ready for training and for client staging review.
 
-Class registry: pothole, crack_transverse, crack_longitudinal, rutting, debris, waterlogging, missing_lane_marking, edge_break, manhole, road_barrier. Severity levels are suggested from estimated area (level_1 < 400 cm² < level_2 < 1500 cm² < level_3).
+Class registry: pothole, crack_transverse, crack_longitudinal, rutting, debris, waterlogging, missing_lane_marking, edge_break, manhole, road_barrier. Severity levels are suggested from estimated area (level_1 < 400 cm² < level_2 < 1500 cm² < level_3). False positives can be marked with an "Ignore" checkbox; they export to `labels_ignore/` and can be remapped to a background class for hard-negative mining (`--ignore-as-class`).
+
+## Train & deploy loop
+
+```bash
+cd inference
+python -m annotate.train_pipeline --annotations annotations --model best.pt --epochs 50
+python -m annotate.train_pipeline --annotations annotations --model best.pt --epochs 50 --ignore-as-class --tensorrt
+```
+
+Reads `annotations/export/`, writes `data.yaml`, optionally merges ignore regions into class 10 (background), runs `yolo detect train`, exports ONNX, and with `--tensorrt` builds a TensorRT engine. Retrained weights land at `inference/best_retrained.pt`; update `MODEL_PATH` in `.env` and restart the systemd units to deploy.

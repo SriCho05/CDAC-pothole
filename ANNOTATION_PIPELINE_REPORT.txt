@@ -123,7 +123,20 @@ artifact. All writes are atomic (temp file + rename).
 - Filters (all / labeled / unlabeled), progress bar, one-click dataset export.
 - Unsaved-changes guard on navigation and window close.
 
----------------------------------------------------------------- 7. API SURFACE (LOCAL ONLY, DEFAULT 127.0.0.1:8765)
+---------------------------------------------------------------- 6. IGNORE REGIONS (FALSE POSITIVES / NEGATIVE MINING)
+
+- UI: "Ignore (false positive)" checkbox per detection; rendered as a gray
+  dashed box (vs solid color for real detections).
+- predictions.json stores the ignore flag with each detection.
+- GET /api/export writes two YOLO label folders:
+    labels/          - positive detections (class 0-9)
+    labels_ignore/   - ignore regions (class 0-9 geometry, flagged)
+- train_pipeline.py can merge labels_ignore/ into class 10 (background) via
+  --ignore-as-class for hard-negative mining in YOLO training.
+- COCO export skips ignore regions (standard detection format).
+- C-DAC client payload omits the ignore flag (client only sees true positives).
+
+---------------------------------------------------------------- 8. API SURFACE (LOCAL ONLY, DEFAULT 127.0.0.1:8765)
 
   GET    /                              Annotator UI
   GET    /api/classes                   Class registry + severity levels
@@ -137,13 +150,29 @@ artifact. All writes are atomic (temp file + rename).
   DELETE /api/frames/{id}               Clear frame labels
   GET    /api/export                    Build and report the export bundle
 
----------------------------------------------------------------- 8. VERIFICATION PERFORMED
+---------------------------------------------------------------- 9. TRAIN & DEPLOY LOOP (train_pipeline.py)
 
-- 11 unit tests (inference/tests/test_annotation.py): class registry
-  bidirectionality, xyxy<->xywh round-trip, YOLO label write/read, exact
-  C-DAC payload key set and values, record dict round-trip, severity
+    python -m annotate.train_pipeline --annotations annotations --model best.pt --epochs 50
+    python -m annotate.train_pipeline --annotations annotations --model best.pt --epochs 50 --ignore-as-class --tensorrt
+
+1. Reads annotations/export/ (labels, labels_ignore, manifest.json).
+2. Runs merge_ignore() if --ignore-as-class: remaps ignore regions to class 10.
+3. Writes data.yaml (nc=10 or 11, names list, train/val paths).
+4. Runs yolo detect train with Ultralytics (transfer from best.pt).
+5. Exports best.pt -> ONNX (best.onnx).
+6. With --tensorrt: builds best_fp16.engine (or best_int8.engine with --int8
+   and --calib-set).
+7. Copies retrained weights to inference/best_retrained.pt.
+8. Instructions: set MODEL_PATH in .env and restart systemd services.
+
+---------------------------------------------------------------- 10. VERIFICATION PERFORMED
+
+- 19 unit tests (14 in inference/tests/test_annotation.py covering class
+  registry bidirectionality, xyxy<->xywh round-trip, YOLO label write/read,
+  exact C-DAC payload key set and values, record dict round-trip, severity
   thresholds, box clamping, empty-label handling, atomic JSON writes,
-  annotated-image export, COCO dataset build.
+  annotated-image export, COCO dataset build, ignore-region YAML writing,
+  and ignore-region class remapping; plus 5 in test_jetson_helpers.py).
 - End-to-end smoke test (inference/tests/smoke_annotation.py): 3 real frames
   from the repo sample video -> pre-annotation -> API review -> detection save
   -> metadata save -> export -> payload schema validation. PASSED.
@@ -157,7 +186,7 @@ label file on every access, which reset severity/confidence/depth/area to
 defaults after any metadata save. Fixed by making predictions.json the
 authoritative record.
 
----------------------------------------------------------------- 9. USAGE
+---------------------------------------------------------------- 11. USAGE
 
     cd inference
     python -m annotate.preannotate --source /path/to/frames --out annotations
@@ -167,7 +196,7 @@ authoritative record.
 Configuration: ANNOTATION_DIR, ANNOTATION_HOST, ANNOTATION_PORT (see
 inference/.env.example).
 
----------------------------------------------------------------- 10. DATASET TARGETS AND NEXT STEPS
+---------------------------------------------------------------- 12. DATASET TARGETS AND NEXT STEPS
 
 Current tooling supports the dataset specification targets: 25,000-50,000
 labeled frames across 150-200 routes, with a reserved 2,000-3,000 frame

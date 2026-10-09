@@ -19,6 +19,7 @@ from annotate.schema import (
     xywh_to_xyxy,
     xyxy_to_xywh,
 )
+from annotate.train_pipeline import NAMES_LIST, merge_ignore, write_yaml
 
 
 def test_class_registry_is_bidirectional():
@@ -120,6 +121,36 @@ def test_write_json_atomic_creates_parents(tmp_path):
     write_json_atomic(path, {"a": 1})
     assert json.loads(path.read_text()) == {"a": 1}
     assert not (tmp_path / "nested" / "out.json.tmp").exists()
+
+
+def test_write_yaml_positive_only(tmp_path):
+    write_yaml(tmp_path / "data.yaml", tmp_path / "ws", "export/labels", include_ignore=False)
+    content = (tmp_path / "data.yaml").read_text()
+    assert "nc: 10" in content
+    assert "pothole" in content and "background" not in content.split("\n")[4]
+    assert "export/labels" in content
+
+
+def test_write_yaml_with_ignore(tmp_path):
+    write_yaml(tmp_path / "data.yaml", tmp_path / "ws", "export/labels_merged", include_ignore=True)
+    content = (tmp_path / "data.yaml").read_text()
+    assert "nc: 11" in content
+    assert "background" in content
+
+
+def test_merge_ignore_remaps_class(tmp_path):
+    work = tmp_path / "ws"
+    positive = work / "export" / "labels"
+    ignore_dir = work / "export" / "labels_ignore"
+    positive.mkdir(parents=True)
+    ignore_dir.mkdir(parents=True)
+    (positive / "f1.txt").write_text("0 0.5 0.5 0.2 0.2\n")
+    (ignore_dir / "f1.txt").write_text("1 0.3 0.3 0.1 0.1\n")
+    merged = merge_ignore(work)
+    lines = (merged / "f1.txt").read_text().strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("0 ")  # original positive
+    assert lines[1].startswith("10 ")  # ignore remapped to background
 
 
 def test_export_writes_annotated_images(tmp_path):
