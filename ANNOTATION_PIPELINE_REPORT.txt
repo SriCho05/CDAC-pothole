@@ -3,8 +3,8 @@ ROAD ANOMALY DETECTION & COCO/YOLO DATASET PIPELINE - IMPLEMENTATION REPORT
 
 Project:  CDAC edge road-anomaly survey (Jetson Orin Nano deployment)
 Phase:    1 - Pipeline validation, local anomaly detection, and dataset build
-Date:     2026-10-06
-Scope:    Local pre-annotation and reannotation tooling (inference/annotate/)
+Date:     2026-10-09 (initial: 2026-10-06)
+Scope:    Local pre-annotation, reannotation, and train/deploy tooling (inference/annotate/)
 
 ---------------------------------------------------------------- 1. OBJECTIVE
 
@@ -209,5 +209,17 @@ Roadmap:
 2. Add LWIR thermal frames and populate bbox_thermal_xywh for fused detection.
 3. Depth/area estimation heuristics from camera geometry to pre-fill
    estimated_depth_cm and estimated_area_sqcm before human review.
-4. Feed the corrected export/labels/ into fine-tuning of the YOLO variant, then
-   TensorRT quantization per the existing Jetson roadmap.
+
+---------------------------------------------------------------- 13. CHANGE LOG (2026-10-09)
+
+- train_pipeline.py: added (full annotate->retrain->deploy loop).
+- schema.py: added Detection.ignore flag and build_coco() COCO export;
+  payload now uses integer bbox values when integral.
+- annotation_app.py: added annotated image rendering (/api/frames/{id}/annotated),
+  ignore-region support in UI and export, COCO export in bundle.
+- annotate.html: added Ignore checkbox, gray dashed rendering, save-status
+  indicator after meta save.
+- tests: added 5 tests (annotated export, COCO build, write_yaml x2,
+  merge_ignore) -> 19 total passing.
+- README.md / copilot-instructions.md: documented train/deploy loop and
+  annotated/COCO export artifacts.
