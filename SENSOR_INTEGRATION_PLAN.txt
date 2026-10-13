@@ -1,0 +1,243 @@
+================================================================================
+SENSOR INTEGRATION PLAN: CDAC POTHOLE DETECTION — JETSON ORIN NANO
+================================================================================
+Date: 2026-10-13
+Project: CDAC Pothole Detection — Jetson Orin Nano
+Scope: Physical mounting, sensor fusion, data synchronization, and
+       inference pipeline integration for RGB + Thermal + GNSS + IMU + Lux
+================================================================================
+
+
+SECTION 1: PHYSICAL MOUNTING SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+1.1 RGB CAMERA (Primary Detection)
+    Recommended: Sony IMX219 / IMX477 (CSI-2, 8MP/12MP) or USB3 UVC
+    Mounting:
+      - Position: Front-center of vehicle, behind windshield
+      - Height: 1.2m - 1.5m from ground
+      - Pitch: 10° - 15° downward (road plane fills lower 60-70% of FOV)
+      - Yaw: 0° (straight forward) or 2-3° toe-in for convergence at 3-5m
+    Resolution: 1920×1080 @ 30fps minimum (1280×720 acceptable)
+    Lens: Wide-angle (120°-160° HFOV) for road coverage
+    Why: Primary detection sensor — YOLO runs on this feed
+
+1.2 THERMAL CAMERA (LWIR, Fusion & Night)
+    Recommended: FLIR Boson 640 / Seek Thermal CompactPro / Teledyne FLIR Lepton 3.5
+    Mounting:
+      - Position: Co-located with RGB, same optical axis
+      - Baseline (horizontal separation): ≤5 cm (minimizes parallax)
+      - Vertical offset: ≤2 cm (optical centers aligned)
+      - Same pitch/yaw as RGB
+    Resolution: 640×512 @ 9-30fps (Boson) or 160×120 @ 9fps (Lepton)
+    Lens: Match RGB HFOV (±5%) — e.g., 9-13mm for 640×512
+    Why: Night detection, waterlogging (thermal contrast), thermal bbox_xywh
+
+1.3 GNSS RECEIVER (Position + Timestamp)
+    Recommended: u-blox ZED-F9P (RTK, 10Hz) or u-blox M8N (10Hz)
+    Mounting:
+      - Antenna: Roof-mounted, clear sky view (magnetic base or pole)
+      - Cable: USB/UART to Jetson (/dev/ttyACM0 or /dev/ttyUSB0)
+      - Baud: 115200 (NMEA GGA/RMC + UBX for RTK)
+    Output: Lat/Lon/Alt, speed, heading, UTC timestamp, fix quality
+    Why: frame_id geo-location, UTC sync for sensor fusion
+
+1.4 IMU (9-Axis: Accel + Gyro + Mag)
+    Recommended: MPU-9250 / ICM-20948 / Xsens MTi-3 (I2C/SPI)
+    Mounting:
+      - Position: Rigidly fixed to camera rig (same vibration profile)
+      - Orientation: X=forward, Y=left, Z=up (vehicle frame)
+      - Cable: I2C (0x68/0x69) or SPI to Jetson header
+    Output: 100-200Hz accel/gyro/mag, vibration RMS, orientation
+    Why: Vibration gating, frame stabilization, road roughness estimation
+
+1.5 LUX SENSOR (Ambient Light / Auto-exposure)
+    Recommended: TSL2591 / BH1750 / VEML7700 (I2C)
+    Mounting:
+      - Position: Co-located with cameras, facing forward
+      - Unobstructed by hood/wiper
+    Output: 0-88000 lux (TSL2591), 1-65535 lux (BH1750)
+    Why: Day/night classification, exposure control, payload environment.lux
+
+1.6 DEPTH/TOF (Optional — Area/Depth Estimation)
+    Recommended: Intel RealSense D435i / Orbbec Femto Mega / VL53L5CX ToF
+    Mounting:
+      - Position: Next to RGB, slightly offset for stereo overlap
+      - Baseline: 5-10cm from RGB
+    Output: Depth map (640×480 @ 30fps) or sparse depth points
+    Why: Auto-estimate estimated_depth_cm and estimated_area_sqcm
+
+
+SECTION 2: MECHANICAL INTEGRATION
+--------------------------------------------------------------------------------
+
+2.1 CAMERA RIG DESIGN
+    Option A: Single PCB/3D-printed bracket holding RGB + Thermal + Lux
+    Option B: Separate enclosures with precision alignment dowels
+    Tolerances:
+      - Translational: ±2mm (X/Y/Z between RGB and Thermal)
+      - Rotational: ±0.5° (pitch/yaw/roll between sensors)
+      - Vibration: <0.5g RMS at 10-500Hz (vehicle mount)
+
+2.2 VIBRATION ISOLATION
+    - Camera rig on 4x M3 silicone grommets (Shore 40-50A)
+    - IMU rigidly attached to same plate (measures actual camera motion)
+    - GNSS antenna on separate roof mount (no vibration coupling)
+
+2.3 CABLE ROUTING
+    - CSI ribbon (RGB): ≤30cm, away from motor cables
+    - USB3 (Thermal): High-quality shielded, ≤2m
+    - UART/I2C (GNSS/IMU/Lux): Twisted pair, ferrite beads
+    - All cables strain-relieved at enclosure entry
+
+2.4 ENVIRONMENTAL
+    - IP67 enclosures for all sensors
+    - Desiccant packs inside enclosures
+    - Thermal: heatsink on FLIR Boson (runs hot)
+    - Operating temp: -20°C to +60°C
+
+
+SECTION 3: ELECTRICAL & JETSON INTERFACES
+--------------------------------------------------------------------------------
+
+3.1 JETSON ORIN NANO PINOUT ALLOCATION
+
+    CSI Port (J21/J22):          RGB Camera (IMX219/IMX477)
+    USB 3.0 (J40/J41):           Thermal Camera (UVC) + GNSS (USB)
+    UART2 (J44 pins 8/10):       GNSS (if UART) /dev/ttyTHS1
+    I2C-1 (J44 pins 3/5):        IMU (0x68) + Lux (0x29/0x5c)
+    I2C-8 (J44 pins 27/28):      Depth/ToF (if I2C)
+    GPIO (J44):                  Sync triggers, status LEDs
+    Fan Header:                  Forced max (jetson_clocks)
+
+3.2 POWER BUDGET (5V/12V rails)
+    RGB CSI:         ~1.5W
+    Thermal USB:     ~2.5W (Boson) / ~1W (Lepton)
+    GNSS USB:        ~1W
+    IMU/Lux I2C:     ~0.1W
+    Depth/ToF:       ~3W (RealSense)
+    Jetson (max):    ~15W (15W mode) / ~25W (MAXN)
+    TOTAL:           ~25-30W (allow 40W headroom)
+
+3.3 TIME SYNCHRONIZATION
+    - All sensors timestamped to GNSS UTC (PPS + NMEA)
+    - Jetson system clock disciplined by GNSS (chrony + PPS)
+    - Frame timestamps = GNSS UTC microseconds
+    - Thermal/RGB frame pairing: closest timestamp match (±1 frame)
+
+
+SECTION 4: SOFTWARE INTEGRATION PIPELINE
+--------------------------------------------------------------------------------
+
+4.1 CAPTURE PIPELINE (inference/capture_multispec.py — TO BE WRITTEN)
+
+    Thread 1: RGB Capture (GStreamer nvarguscamerasrc → appsink)
+    Thread 2: Thermal Capture (OpenCV V4L2 / libuvc)
+    Thread 3: GNSS Reader (existing gnss.py + PPS)
+    Thread 4: IMU Reader (I2C smbus2, 200Hz)
+    Thread 5: Lux Reader (I2C, 10Hz)
+    Thread 6: Depth/ToF (librealsense / vendor SDK)
+
+    Synchronization:
+      - Shared frame_id = GNSS timestamp (microseconds)
+      - Ring buffer (size=3) per sensor, matched by timestamp
+      - Output: FramePacket { frame_id, rgb, thermal, telemetry, env }
+
+4.2 CALIBRATION WORKFLOW (inference/calib/)
+
+    Step 1: Intrinsics (per sensor)
+      - Checkerboard 8×6, 30mm squares
+      - 20+ frames per sensor, varying distance/angle
+      - cv2.calibrateCamera() → K_rgb, K_thermal, dist_rgb, dist_thermal
+
+    Step 2: Extrinsics (RGB ↔ Thermal)
+      - Same checkerboard visible to both simultaneously
+      - cv2.stereoCalibrate() → R, T, E, F
+      - Verify reprojection error <0.5px
+
+    Step 3: Road-Plane Homography
+      - Vehicle height (1.3m) + pitch (12°) known
+      - H = K_thermal * [R|T] * inv(K_rgb) (road plane Z=0)
+      - Project RGB bbox → thermal bbox_xywh
+
+    Step 4: IMU-Camera Extrinsics
+      - IMU frame → Camera frame transform
+      - Kalibr or manual measurement (rigid mount)
+
+4.3 INFERENCE PIPELINE INTEGRATION (local_runner.py modifications)
+
+    Current: capture → preprocess → inference → postprocess → storage
+    Proposed:
+      1. FramePacket arrives (all sensors synced)
+      2. IMU vibration gate: if RMS < threshold → skip, log event
+      3. Lux gate: if < 100 lux → thermal-only mode
+      4. 160px scene-change detector on RGB
+      5. If ROI: crop 224px → YOLO inference
+      6. SORT tracking across frames
+      7. If tracked: bbox update via tracker (skip YOLO)
+      8. Project bbox to thermal via homography H
+      9. Depth/ToF → estimated_depth_cm, area_sqcm
+      10. Build C-DAC payload (all fields populated)
+      11. Async: storage + API queue
+
+
+SECTION 5: CALIBRATION TARGETS & VALIDATION
+--------------------------------------------------------------------------------
+
+5.1 ACCURACY TARGETS
+    - RGB↔Thermal bbox IoU: >0.85 (after homography)
+    - GNSS timestamp sync: <1ms jitter
+    - IMU vibration detection: 95% recall for pothole impact
+    - Depth error: <10% for 0.5-5m range
+
+5.2 VALIDATION PROCEDURE
+    1. Static: Checkerboard at known distances → verify reprojection
+    2. Dynamic: Drive known pothole course → compare detected vs truth
+    3. Night: Thermal detection recall vs RGB day baseline
+    4. Vibration: IMU spike correlation with detected anomalies
+
+5.3 FAILURE MODES
+    - Thermal dropout → fallback to RGB only (payload thermal_xywh=null)
+    - GNSS loss → last known position + dead reckoning (IMU)
+    - IMU failure → disable vibration gating, run full inference
+    - Sync loss >2 frames → alert, re-initialize sync
+
+
+SECTION 6: IMPLEMENTATION ROADMAP
+--------------------------------------------------------------------------------
+
+Phase 0 (Now, no sensors):
+  - [ ] Rebuild 320px TensorRT FP16 engine
+  - [ ] Add ROI inference (--roi-mode) to local_runner.py
+  - [ ] Add SORT tracker to local_runner.py
+  - [ ] Add inference/throttle.py (placeholder for IMU gate)
+
+Phase 1 (RGB + GNSS arrive):
+  - [ ] Write inference/capture_multispec.py (RGB + GNSS only)
+  - [ ] Integrate GNSS UTC timestamps into FramePacket
+  - [ ] Auto-populate telemetry in C-DAC payload
+
+Phase 2 (Thermal arrives):
+  - [ ] Add thermal capture thread
+  - [ ] Run intrinsic/extrinsic calibration
+  - [ ] Implement homography H for bbox projection
+  - [ ] Populate bbox_thermal_xywh in payload
+
+Phase 3 (IMU + Lux arrive):
+  - [ ] Add IMU reader (I2C, vibration RMS)
+  - [ ] Implement vibration gate in throttle.py
+  - [ ] Add Lux reader, day/night thermal switch
+
+Phase 4 (Depth/ToF optional):
+  - [ ] Add depth capture
+  - [ ] Auto-estimate depth_cm and area_sqcm
+
+Phase 5 (System hardening):
+  - [ ] jetson_clocks + fan max script
+  - [ ] Thermal throttling monitor + graceful degradation
+  - [ ] Continuous 4-hour soak test
+  - [ ] Memory/swap tuning
+
+================================================================================
+END OF SENSOR INTEGRATION PLAN
+================================================================================

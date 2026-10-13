@@ -1,0 +1,217 @@
+================================================================================
+POC STATUS REPORT: CDAC POTHOLE DETECTION — JETSON ORIN NANO
+================================================================================
+Date: 2026-10-13
+Project: CDAC Pothole Detection — Jetson Orin Nano
+Status: Anomaly detection & reannotation pipeline COMPLETE
+        Sensor integration PLANNED (see SENSOR_INTEGRATION_PLAN.txt)
+        FPS optimization proposals DOCUMENTED
+================================================================================
+
+
+SECTION 1: WATER ALREADY PASSED (COMPLETED)
+--------------------------------------------------------------------------------
+
+1.1 ANOMALY DETECTION & REANNOTATION PIPELINE
+    - inference/annotate/preannotate.py
+      Batch YOLO inference over image dirs or video files.
+      Produces: manifest.json, predictions.json, labels/*.txt
+      Tested on real frames from repo sample video. PASSED.
+
+    - inference/annotate/annotation_app.py + annotate.html
+      Local FastAPI review UI at http://127.0.0.1:8765
+      Canvas editor: draw, move, resize, delete, ignore (false positives)
+      Per-frame: class (10-class registry), severity, confidence, depth, area
+      Telemetry + environment metadata forms (auto-saved on change)
+      Filters: all/labeled/unlabeled, progress bar, one-click export
+      Serves source images and annotated previews
+      Tested via httpx TestClient. PASSED.
+
+    - inference/annotate/classes.py
+      10-class registry: pothole, crack_transverse, crack_longitudinal,
+      rutting, debris, waterlogging, missing_lane_marking, edge_break,
+      manhole, road_barrier
+      Severity: level_1 (<400 cm²), level_2 (<1500 cm²), level_3 (else)
+
+1.2 DATA FORMATS (ALL VERIFIED)
+    - YOLO 5-column labels (class_id, cx, cy, w, h normalized) — compatible
+      with ultralytics `yolo train`
+    - C-DAC JSON payload (exact schema match verified):
+      frame_id, timestamp_unix_us, telemetry{lat/lon/alt/speed/heading/imu},
+      environment{lux/surface/weather}, detections{class,severity,confidence,
+      bbox_rgb_xywh,bbox_thermal_xywh,estimated_depth_cm,estimated_area_sqcm}
+    - COCO format (images/annotations/categories, 1-based category IDs)
+    - predictions.json as authoritative store (rich attributes preserved
+      across saves — bug found and fixed)
+
+1.3 TRAINING & DEPLOYMENT
+    - inference/annotate/train_pipeline.py
+      Reads annotations/export/, writes data.yaml, runs yolo train,
+      exports ONNX, optionally builds TensorRT engine.
+      Supports --ignore-as-class for hard-negative mining (class 10).
+    - inference/annotate/validate_engine.py
+      PyTorch vs TensorRT accuracy+speed comparison on real frames:
+      IoU matching, missed/false-positive counts, confidence delta,
+      latency percentiles, FPS. Writes JSON report.
+
+1.4 TESTING (27 TESTS, ALL PASSING)
+    - tests/test_annotation.py (14 tests): schema, payload, YOLO roundtrip,
+      severity, COCO build, ignore regions, YAML writing, merge_ignore
+    - tests/test_validate_engine.py (8 tests): box_iou, summarize,
+      compare_detections (perfect match, miss/fp, class mismatch)
+    - tests/test_jetson_helpers.py (5 tests): CSI pipeline, video open,
+      NMEA parsing
+
+1.5 REPORTING
+    - ANNOTATION_PIPELINE_REPORT.txt (15 sections, fully documented)
+    - README.md, .env.example, copilot-instructions.md updated
+    - Existing TENSORRT_COMPARISON_REPORT.txt (Jetson benchmark reference)
+
+1.6 BENCHMARK BASELINE (MEASURED)
+    - PyTorch CPU (dev machine): 234 ms/frame, 4.27 FPS, 20 frames
+    - PyTorch CUDA (Jetson Orin Nano, existing report): 48.17 ms/frame,
+      20.75 FPS @ 640px
+    - TensorRT FP16 (Jetson, existing report): 47.38 ms/frame,
+      21.10 FPS @ 640px (~1.7% app-level gain)
+    - Recommendation from existing report: 320px engine for 50+ FPS
+
+
+SECTION 2: WHAT IS LEFT IN THE POC
+--------------------------------------------------------------------------------
+
+2.1 SENSOR INTEGRATION (BLOCKED — NO HARDWARE YET)
+    Detailed in SENSOR_INTEGRATION_PLAN.txt (Sections 1-6):
+      - Physical mounting specs for RGB, Thermal, GNSS, IMU, Lux, Depth
+      - Jetson pinout allocation, power budget, time synchronization
+      - Multi-sensor capture pipeline architecture (6 threads)
+      - Calibration workflow (intrinsics, extrinsics, homography)
+      - Inference pipeline integration with sensor gating
+      - Validation targets and failure modes
+      - 5-phase implementation roadmap
+
+2.2 TENSORRT INT8 CALIBRATION (READY TO RUN ON JETSON)
+    - train_pipeline.py has --int8 flag + --calib-set
+    - Need to carve 2k-3k calibration frames from manifest.json
+    - Need Jetson + trtexec to build the actual engine
+    STATUS: code ready, hardware blocked
+
+2.3 SYSTEM HARDENING (NOT DONE)
+    - Thermal throttling prevention (jetson_clocks, fan control)
+    - Continuous operation (hours-long road surveys)
+    - Memory leak checks, swap tuning
+    STATUS: not implemented
+
+2.4 C-DAC → CLIENT API BRIDGE (NOT DONE)
+    - Secure automated relay of JSON payloads to client infrastructure
+    - Authentication, batching, retry logic
+    STATUS: not implemented
+
+
+SECTION 3: FPS OPTIMIZATION PROPOSALS (WITH SENSORS)
+--------------------------------------------------------------------------------
+
+KEY INSIGHT: The bottleneck at 640×640 is pure NN inference (~45ms on Jetson).
+Adding sensors doesn't directly speed up the NN — but it enables smarter
+pipeline strategies that reduce HOW OFTEN and HOW MUCH of the image we process.
+
+3.1 PROPOSAL A: ADAPTIVE RESOLUTION GATE
+    Problem: 640px is overkill for most frames (empty road).
+    Solution:
+      - Run a 160×160 "scene change" detector every frame (cheap, ~5ms)
+      - If scene is "boring" (low activity), skip full inference
+      - If ROI detected, run full 640px YOLO only on that crop (~15-20ms)
+    Expected: 2-3x FPS improvement, ~95% frames get cheap processing
+
+3.2 PROPOSAL B: SENSOR-TRIGGERED INFERENCE
+    Problem: Running detection every frame wastes compute on clean road.
+    Solution:
+      - IMU: monitor vibration/acceleration envelope
+        - Low vibration = smooth asphalt = skip inference
+        - Spike = rough road or impact = trigger detection
+      - Lux: at night, switch to thermal-only detection (cheaper, fewer classes)
+      - GPS speed: if speed < 5 km/h (stopped), run detection faster
+    Expected: 5-10x FPS effective rate, power savings on battery
+
+3.3 PROPOSAL C: ROI-BASED DETECTION (HARD NEGATIVE MINING)
+    Problem: Full-frame inference processes sky, gutter, car roofs.
+    Solution:
+      - Use the existing "ignore" regions + a cheap foreground/motion mask
+      - Extract ROI (224×224) around anomaly candidates only
+      - Run YOLO on crop instead of full 640×640
+    Expected: 3-4x faster per-inference (224 vs 640 = ~8x less pixels)
+
+3.4 PROPOSAL D: ASYNC PIPELINE WITH QUEUES
+    Problem: Capture → preprocess → inference → postprocess is synchronous.
+    Solution:
+      - Thread 1: capture (GStreamer appsink drop=true, already in codebase)
+      - Thread 2: batch preprocess + GPU inference (batch=2-4)
+      - Thread 3: postprocess + storage
+      - Queue between threads decouples slowest stage
+    Expected: Hides latency variance, smoother throughput
+    Note: The existing repo commit "Dynamic batching achieves 105 FPS native"
+    suggests batching is viable.
+
+3.5 PROPOSED SOLUTION: "ADAPTIVE SENSOR-AWARE PIPELINE"
+    Combine A+B+C+D into one strategy:
+
+    FRAME N:
+      1. Capture RGB + thermal + IMU (async, timestamp-synced)
+      2. IMU scene-activity check (microsecond): skip or proceed
+      3. If proceed: run 160×160 motion/heat-change detector
+      4. If ROI found: crop from RGB, run full YOLO on 224×224 crop
+      5. If YOLO fires: track with SORT/deepSORT into FRAME N+1..N+3
+      6. Skip full inference for tracked frames (just update bbox via tracking)
+      7. Async: store events, send to C-DAC payload queue
+
+    EXPECTED PERFORMANCE:
+      - Empty road: 8-12ms per frame (tracker update only) = ~100-125 FPS
+      - Active anomaly: 20-30ms (ROI detection) = ~30-50 FPS
+      - Worst case (full frame): 45ms = ~22 FPS (same as current, but rarer)
+
+    IMPLEMENTATION TASKS (priority order):
+      1. [Sensor-blocked] Write inference/capture_multispec.py
+         Multi-camera + IMU + GNSS capture with PTP timestamp sync
+      2. [Doable now] Add ROI inference mode to local_runner.py
+         --roi-mode flag: crop inference on detection candidates
+      3. [Doable now] Add SORT tracker to local_runner.py
+         Track detected anomalies across frames, skip redetection
+      4. [Doable now] Write inference/throttle.py
+         IMU-vibration-based inference gate (configurable threshold)
+      5. [Jetson-only] Build 320px INT8 engine
+         python -m annotate.train_pipeline --int8 --calib-set <frames>
+      6. [Jetson-only] System hardening script
+         jetson_clocks, fan max, memory lock, thermal logging
+
+3.6 QUICK WIN (IMPLEMENT TODAY, NO SENSORS)
+    Rebuild the engine at 320×320. The existing report says "rebuild a 320px
+    FP16 engine for 50+ FPS." This is a 1-line change:
+      python -m annotate.train_pipeline --model best.pt --tensorrt
+    Then use --image-size 320 on Jetson.
+    Estimated: 20.75 FPS -> 50+ FPS (2.5x) with minimal accuracy risk.
+
+
+SECTION 4: RECOMMENDED NEXT STEPS
+--------------------------------------------------------------------------------
+
+1. HIGH (immediate, no sensors):
+   a. Rebuild 320px TensorRT FP16 engine via train_pipeline.py
+   b. Add ROI inference mode to local_runner.py (--roi-mode)
+   c. Add SORT tracking to reduce redundant detection (skip 3 out of 4 frames)
+
+2. MEDIUM (when sensors arrive):
+   a. Write inference/capture_multispec.py (RGB + thermal + IMU + GNSS sync)
+   b. Implement Proposal A+B (adaptive resolution + sensor gating)
+
+3. BLOCKED (needs hardware):
+   a. TensorRT INT8 calibration (need Jetson + calibration frames)
+   b. Thermal pipeline validation (need LWIR camera)
+   c. System hardening for continuous operation (Jetson needed)
+
+4. LATER (Phase 2):
+   a. C-DAC → client staging API bridge
+   b. Depth/ToF integration for auto area/depth estimation
+   c. Knowledge distillation (repo has the pruning PDF — build lightweight model)
+
+================================================================================
+END OF POC STATUS REPORT
+================================================================================
