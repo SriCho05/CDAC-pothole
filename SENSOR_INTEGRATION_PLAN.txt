@@ -59,7 +59,115 @@ SECTION 1: PHYSICAL MOUNTING SPECIFICATIONS
     Output: 0-88000 lux (TSL2591), 1-65535 lux (BH1750)
     Why: Day/night classification, exposure control, payload environment.lux
 
-1.6 DEPTH/TOF (Optional — Area/Depth Estimation)
+================================================================================
+SENSOR INTEGRATION PLAN: CDAC POTHOLE DETECTION — JETSON ORIN NANO
+================================================================================
+Date: 2026-10-13
+Project: CDAC Pothole Detection — Jetson Orin Nano
+Scope: Physical mounting, sensor fusion, data synchronization, and
+       inference pipeline integration for RGB + Thermal + GNSS + IMU + Lux
+       + Depth/ToF + LiDAR (Research conducted 2026-09-25, integrated 2026-10-13)
+================================================================================
+
+
+SECTION 1: PHYSICAL MOUNTING SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+1.1 RGB CAMERA (Primary Detection)
+    Recommended: Sony IMX219 / IMX477 (CSI-2, 8MP/12MP) or USB3 UVC
+    Mounting:
+      - Position: Front-center of vehicle, behind windshield
+      - Height: 1.2m - 1.5m from ground
+      - Pitch: 10° - 15° downward (road plane fills lower 60-70% of FOV)
+      - Yaw: 0° (straight forward) or 2-3° toe-in for convergence at 3-5m
+    Resolution: 1920×1080 @ 30fps minimum (1280×720 acceptable)
+    Lens: Wide-angle (120°-160° HFOV) for road coverage
+    Why: Primary detection sensor — YOLO runs on this feed
+
+1.2 THERMAL CAMERA (LWIR, Fusion & Night)
+    Recommended: FLIR Boson 640 / Seek Thermal CompactPro / Teledyne FLIR Lepton 3.5
+    Mounting:
+      - Position: Co-located with RGB, same optical axis
+      - Baseline (horizontal separation): ≤5 cm (minimizes parallax)
+      - Vertical offset: ≤2 cm (optical centers aligned)
+      - Same pitch/yaw as RGB
+    Resolution: 640×512 @ 9-30fps (Boson) or 160×120 @ 9fps (Lepton)
+    Lens: Match RGB HFOV (±5%) — e.g., 9-13mm for 640×512
+    Why: Night detection, waterlogging (thermal contrast), thermal bbox_xywh
+
+1.3 GNSS RECEIVER (Position + Timestamp)
+    Recommended: u-blox ZED-F9P (RTK, 10Hz) or u-blox M8N (10Hz)
+    Mounting:
+      - Antenna: Roof-mounted, clear sky view (magnetic base or pole)
+      - Cable: USB/UART to Jetson (/dev/ttyACM0 or /dev/ttyUSB0)
+      - Baud: 115200 (NMEA GGA/RMC + UBX for RTK)
+    Output: Lat/Lon/Alt, speed, heading, UTC timestamp, fix quality
+    Why: frame_id geo-location, UTC sync for sensor fusion
+
+1.4 IMU (9-Axis: Accel + Gyro + Mag)
+    Recommended: MPU-9250 / ICM-20948 / Xsens MTi-3 (I2C/SPI)
+    Mounting:
+      - Position: Rigidly fixed to camera rig (same vibration profile)
+      - Orientation: X=forward, Y=left, Z=up (vehicle frame)
+      - Cable: I2C (0x68/0x69) or SPI to Jetson header
+    Output: 100-200Hz accel/gyro/mag, vibration RMS, orientation
+    Why: Vibration gating, frame stabilization, road roughness estimation
+
+1.5 LUX SENSOR (Ambient Light / Auto-exposure)
+    Recommended: TSL2591 / BH1750 / VEML7700 (I2C)
+    Mounting:
+      - Position: Co-located with cameras, facing forward
+      - Unobstructed by hood/wiper
+    Output: 0-88000 lux (TSL2591), 1-65535 lux (BH1750)
+    Why: Day/night classification, exposure control, payload environment.lux
+
+1.6 DEPTH/TOF SENSORS (Stereo-Depth + LiDAR)
+    This section covers both the Intel RealSense D455/D455f stereo-depth camera
+    and scanning LiDAR (e.g., Livox Mid-360). Both provide 3D geometry but
+    with different trade-offs. They can be used independently or together.
+
+    1.6.1 INTEL REAL SENSE D455 / D455f (Active IR Stereo Depth)
+        Recommended: D455f for outdoor/reflective conditions (IR-pass filter)
+        Mounting:
+          - Position: Co-located with RGB, same optical axis
+          - Baseline (horizontal separation): ≤5 cm
+          - Vertical offset: ≤2 cm (optical centers aligned)
+          - Same pitch/yaw as RGB
+        Resolution: Up to 1280×720 @ 90fps (depth), 1280×800 @ 30fps (RGB)
+        Operating range: 0.6m – 6m (Intel recommended); up to ~10-20m under favorable conditions
+        Depth accuracy: <2% error at 4m
+        IMU: Yes (6-DoF, built-in)
+        IR filter: D455f has CLAREX NIR-75N IR-pass filter
+        IP rating: None (D456/D457 for IP65)
+        Interface: USB-C 3.1 Gen 1
+        Dimensions: 124 × 29 × 26.8 mm
+        Indicative price (India): ~₹45,000–₹57,000
+        Why: Fast, low-cost stereo-depth baseline; RGB-depth factory-aligned; 
+             early PoC and cross-validation against LiDAR
+
+    1.6.2 SCANNING LIDAR (905 nm, e.g., Livox Mid-360 / Mid-360S)
+        Recommended: Livox Mid-360 or Mid-360S
+        Mounting:
+          - Position: Adjacent to RGB/Thermal rig, forward-facing
+          - Height: Same as camera rig (~1.2-1.5m)
+          - Pitch: 10°-15° downward (same as cameras)
+          - Baseline: ≤10 cm from RGB (minimize parallax for projection)
+        Specs (Mid-360):
+          - FOV: 98.4° × 38.4° (circular scan pattern)
+          - Range: up to 70m (100m @ 10% reflectivity)
+          - Points/sec: 100,000
+          - Accuracy: ±2cm
+          - IP67, -20°C to +60°C
+        Interface: Ethernet (ROS 2 driver available)
+        Indicative price (India): ~₹81k–₹1.22L
+        Why: Primary geometric sensor — sun-robust, long-range, dry-pothole depth
+
+    1.6.3 BATHYMETRIC LIDAR (532 nm, e.g., RIEGL VQ-840-G) — PHASE 2
+        For water-filled pothole bottom measurement only.
+        Not part of Phase 0/1 prototype. Requires separate procurement if 
+        conventional LiDAR + RealSense cannot resolve submerged bottom.
+
+1.7 DEPTH/TOF — LEGACY ENTRY (kept for reference)
     Recommended: Intel RealSense D435i / Orbbec Femto Mega / VL53L5CX ToF
     Mounting:
       - Position: Next to RGB, slightly offset for stereo overlap
@@ -72,28 +180,37 @@ SECTION 2: MECHANICAL INTEGRATION
 --------------------------------------------------------------------------------
 
 2.1 CAMERA RIG DESIGN
-    Option A: Single PCB/3D-printed bracket holding RGB + Thermal + Lux
+    Option A: Single PCB/3D-printed bracket holding RGB + Thermal + Lux + RealSense
     Option B: Separate enclosures with precision alignment dowels
     Tolerances:
-      - Translational: ±2mm (X/Y/Z between RGB and Thermal)
+      - Translational: ±2mm (X/Y/Z between RGB, Thermal, RealSense)
       - Rotational: ±0.5° (pitch/yaw/roll between sensors)
       - Vibration: <0.5g RMS at 10-500Hz (vehicle mount)
+    LiDAR Mounting:
+      - Separate rigid bracket adjacent to camera rig
+      - Baseline ≤10cm from RGB (minimize projection parallax)
+      - Same pitch/yaw orientation
+      - Must not block camera FOV
 
 2.2 VIBRATION ISOLATION
     - Camera rig on 4x M3 silicone grommets (Shore 40-50A)
     - IMU rigidly attached to same plate (measures actual camera motion)
     - GNSS antenna on separate roof mount (no vibration coupling)
+    - LiDAR on own damped mount (measures road, not vehicle body)
 
 2.3 CABLE ROUTING
     - CSI ribbon (RGB): ≤30cm, away from motor cables
     - USB3 (Thermal): High-quality shielded, ≤2m
+    - USB3 (RealSense): High-quality shielded, ≤2m, dedicated controller
+    - Ethernet (LiDAR): Cat6, shielded, ≤10m, PoE if supported
     - UART/I2C (GNSS/IMU/Lux): Twisted pair, ferrite beads
     - All cables strain-relieved at enclosure entry
 
 2.4 ENVIRONMENTAL
-    - IP67 enclosures for all sensors
+    - IP67 enclosures for all sensors (RealSense D456/D457 if exposed)
     - Desiccant packs inside enclosures
     - Thermal: heatsink on FLIR Boson (runs hot)
+    - LiDAR: IP67 rated, built-in thermal management
     - Operating temp: -20°C to +60°C
 
 
@@ -103,27 +220,31 @@ SECTION 3: ELECTRICAL & JETSON INTERFACES
 3.1 JETSON ORIN NANO PINOUT ALLOCATION
 
     CSI Port (J21/J22):          RGB Camera (IMX219/IMX477)
-    USB 3.0 (J40/J41):           Thermal Camera (UVC) + GNSS (USB)
+    USB 3.0 (J40/J41):           Thermal Camera (UVC) + GNSS (USB) + RealSense (USB3)
     UART2 (J44 pins 8/10):       GNSS (if UART) /dev/ttyTHS1
     I2C-1 (J44 pins 3/5):        IMU (0x68) + Lux (0x29/0x5c)
     I2C-8 (J44 pins 27/28):      Depth/ToF (if I2C)
     GPIO (J44):                  Sync triggers, status LEDs
+    Ethernet (RJ45):             LiDAR (Ethernet/ROS2)
     Fan Header:                  Forced max (jetson_clocks)
 
 3.2 POWER BUDGET (5V/12V rails)
-    RGB CSI:         ~1.5W
-    Thermal USB:     ~2.5W (Boson) / ~1W (Lepton)
-    GNSS USB:        ~1W
-    IMU/Lux I2C:     ~0.1W
-    Depth/ToF:       ~3W (RealSense)
-    Jetson (max):    ~15W (15W mode) / ~25W (MAXN)
-    TOTAL:           ~25-30W (allow 40W headroom)
+    RGB CSI:            ~1.5W
+    Thermal USB:        ~2.5W (Boson) / ~1W (Lepton)
+    GNSS USB:           ~1W
+    IMU/Lux I2C:        ~0.1W
+    RealSense USB3:     ~3W (D455)
+    LiDAR Ethernet:     ~5-8W (Livox Mid-360)
+    Jetson (max):       ~15W (15W mode) / ~25W (MAXN)
+    TOTAL:              ~30-35W (allow 50W headroom)
 
 3.3 TIME SYNCHRONIZATION
     - All sensors timestamped to GNSS UTC (PPS + NMEA)
     - Jetson system clock disciplined by GNSS (chrony + PPS)
     - Frame timestamps = GNSS UTC microseconds
     - Thermal/RGB frame pairing: closest timestamp match (±1 frame)
+    - RealSense depth/RGB: hardware-synchronized (factory-aligned)
+    - LiDAR packets: GNSS PPS + NMEA + LiDAR internal timestamp → software sync
 
 
 SECTION 4: SOFTWARE INTEGRATION PIPELINE
@@ -136,35 +257,74 @@ SECTION 4: SOFTWARE INTEGRATION PIPELINE
     Thread 3: GNSS Reader (existing gnss.py + PPS)
     Thread 4: IMU Reader (I2C smbus2, 200Hz)
     Thread 5: Lux Reader (I2C, 10Hz)
-    Thread 6: Depth/ToF (librealsense / vendor SDK)
+    Thread 6: RealSense Capture (librealsense SDK → depth + RGB, hardware-synced)
+    Thread 7: LiDAR Capture (ROS 2 driver / vendor SDK → point cloud)
 
     Synchronization:
       - Shared frame_id = GNSS timestamp (microseconds)
       - Ring buffer (size=3) per sensor, matched by timestamp
-      - Output: FramePacket { frame_id, rgb, thermal, telemetry, env }
+      - RealSense: depth + RGB already hardware-synced via SDK
+      - LiDAR: each packet has internal timestamp; matched to nearest GNSS frame
+      - Output: FramePacket { frame_id, rgb, thermal, realsense_depth, 
+                              lidar_points, telemetry, env }
 
-4.2 CALIBRATION WORKFLOW (inference/calib/)
+4.2 DEPTH SENSOR COMPARISON & SELECTION LOGIC
+
+    | Aspect              | RealSense D455f           | Livox Mid-360 LiDAR       |
+    |---------------------|---------------------------|---------------------------|
+    | Principle           | Active IR stereo triang   | Scanning 905nm ToF        |
+    | Range               | 0.6–6m (recommended)      | 0.1–70m                   |
+    | Outdoor Sunlight    | Good (avoid direct sun)   | Excellent (light-indep)   |
+    | Wet Road            | Specular dropouts         | Specular dropouts         |
+    | Water-filled bottom | No (surface return only)  | No (surface return only)  |
+    | RGB alignment       | Factory-calibrated        | Requires extrinsic calib  |
+    | IP rating           | None (D456/D457 IP65)     | IP67                      |
+    | Cost                | ~₹57k                     | ~₹1.0–1.2L                |
+    | Role                | Close-range baseline      | Primary long-range        |
+
+    Fusion Strategy:
+      - RealSense: close-range (<6m), cross-validation, no calibration needed
+      - LiDAR: primary >6m, sun-robust, requires extrinsic calibration
+      - Water-filled: neither reliably sees bottom → document limitation
+
+4.3 CALIBRATION WORKFLOW (inference/calib/)
 
     Step 1: Intrinsics (per sensor)
       - Checkerboard 8×6, 30mm squares
       - 20+ frames per sensor, varying distance/angle
-      - cv2.calibrateCamera() → K_rgb, K_thermal, dist_rgb, dist_thermal
+      - cv2.calibrateCamera() → K_rgb, K_thermal, K_realsense, dist_*
 
     Step 2: Extrinsics (RGB ↔ Thermal)
       - Same checkerboard visible to both simultaneously
       - cv2.stereoCalibrate() → R, T, E, F
       - Verify reprojection error <0.5px
 
-    Step 3: Road-Plane Homography
+    Step 3: RealSense RGB-Depth Alignment
+      - Factory-calibrated; librealsense `align` utility maps depth→RGB pixels
+      - Validate: project known checkerboard depth against measured distance
+      - Expected error: <2% at 4m
+
+    Step 4: LiDAR-Camera Extrinsics (RGB ↔ LiDAR)
+      - Calibration target: planar checkerboard + LiDAR-reflective target
+      - Simultaneous capture: LiDAR point cloud + camera image
+      - Solve PnP: LiDAR points on checkerboard plane → camera image corners
+      - Or: use planar target + PnP on LiDAR plane fit + camera detection
+      - Verify: project LiDAR points → camera image; target <1px error at 5m
+
+    Step 5: Road-Plane Homography (RGB ↔ Thermal)
       - Vehicle height (1.3m) + pitch (12°) known
       - H = K_thermal * [R|T] * inv(K_rgb) (road plane Z=0)
       - Project RGB bbox → thermal bbox_xywh
 
-    Step 4: IMU-Camera Extrinsics
+    Step 6: IMU-Camera Extrinsics
       - IMU frame → Camera frame transform
       - Kalibr or manual measurement (rigid mount)
 
-4.3 INFERENCE PIPELINE INTEGRATION (local_runner.py modifications)
+    Step 7: RealSense Built-in IMU
+      - 6-DoF IMU data available via librealsense
+      - Can supplement/fuse with external IMU for vibration gating
+
+4.4 INFERENCE PIPELINE INTEGRATION (local_runner.py modifications)
 
     Current: capture → preprocess → inference → postprocess → storage
     Proposed:
@@ -176,9 +336,13 @@ SECTION 4: SOFTWARE INTEGRATION PIPELINE
       6. SORT tracking across frames
       7. If tracked: bbox update via tracker (skip YOLO)
       8. Project bbox to thermal via homography H
-      9. Depth/ToF → estimated_depth_cm, area_sqcm
-      10. Build C-DAC payload (all fields populated)
-      11. Async: storage + API queue
+      9. Depth fusion:
+           a. RealSense: sample depth map inside pothole ROI → median depth
+           b. LiDAR: project points via R,t → camera pixels → filter by ROI
+              → fit local road plane → depth = perpendicular distance to plane
+      10. estimated_depth_cm, area_sqcm from depth source (prefer LiDAR >6m)
+      11. Build C-DAC payload (all fields populated)
+      12. Async: storage + API queue
 
 
 SECTION 5: CALIBRATION TARGETS & VALIDATION
@@ -186,21 +350,32 @@ SECTION 5: CALIBRATION TARGETS & VALIDATION
 
 5.1 ACCURACY TARGETS
     - RGB↔Thermal bbox IoU: >0.85 (after homography)
+    - RGB↔RealSense depth alignment: <1px (factory-aligned, validate <1px)
+    - LiDAR→Camera projection error: <2px at 10m, <1px at 5m
     - GNSS timestamp sync: <1ms jitter
     - IMU vibration detection: 95% recall for pothole impact
-    - Depth error: <10% for 0.5-5m range
+    - Depth error (RealSense): <2% at 4m (per Intel spec)
+    - Depth error (LiDAR): ±2cm (per Livox spec) on flat road
+    - Pothole depth estimation error: <10% for 0.5-5m range
 
 5.2 VALIDATION PROCEDURE
     1. Static: Checkerboard at known distances → verify reprojection
-    2. Dynamic: Drive known pothole course → compare detected vs truth
-    3. Night: Thermal detection recall vs RGB day baseline
-    4. Vibration: IMU spike correlation with detected anomalies
+    2. RealSense depth validation: measure known distances at 1m, 3m, 5m
+    3. LiDAR projection: project known targets → camera image, measure pixel error
+    4. Dynamic: Drive known pothole course → compare detected vs truth
+    5. Night: Thermal detection recall vs RGB day baseline
+    6. Vibration: IMU spike correlation with detected anomalies
+    7. Cross-validation: RealSense depth vs LiDAR depth in 0-6m overlap region
+    7. Water-filled: controlled test pothole with known depths + water
 
 5.3 FAILURE MODES
     - Thermal dropout → fallback to RGB only (payload thermal_xywh=null)
+    - RealSense dropout → fallback to LiDAR depth (log warning)
+    - LiDAR dropout → fallback to RealSense (0-6m) or RGB only
     - GNSS loss → last known position + dead reckoning (IMU)
     - IMU failure → disable vibration gating, run full inference
     - Sync loss >2 frames → alert, re-initialize sync
+    - Water/rain on lens → thermal/RealSense dropout; hydrophobic coating recommended
 
 
 SECTION 6: IMPLEMENTATION ROADMAP
@@ -228,16 +403,230 @@ Phase 3 (IMU + Lux arrive):
   - [ ] Implement vibration gate in throttle.py
   - [ ] Add Lux reader, day/night thermal switch
 
-Phase 4 (Depth/ToF optional):
-  - [ ] Add depth capture
-  - [ ] Auto-estimate depth_cm and area_sqcm
+Phase 4a (RealSense D455f arrives):
+  - [ ] Add RealSense capture thread (librealsense)
+  - [ ] Validate factory RGB-depth alignment (<1px)
+  - [ ] Implement RealSense depth sampling inside pothole ROI
+  - [ ] Populate estimated_depth_cm, area_sqcm from RealSense (0-6m)
+  - [ ] Cross-validate RealSense depth against manual measurements
 
-Phase 5 (System hardening):
+Phase 4b (LiDAR Livox Mid-360 arrives):
+  - [ ] Add LiDAR capture thread (ROS 2 driver / Livox SDK)
+  - [ ] Run LiDAR-camera extrinsic calibration (checkerboard + reflective target)
+  - [ ] Implement LiDAR point cloud → camera projection (R, t)
+  - [ ] Filter projected points by pothole ROI
+  - [ ] Fit local road plane from surrounding LiDAR points
+  - [ ] Compute pothole depth = perpendicular distance to road plane
+  - [ ] Cross-validate LiDAR depth vs RealSense in 0-6m overlap
+  - [ ] Prefer LiDAR depth >6m, RealSense <6m (higher density)
+
+Phase 4c (Water-Filled Pothole Experiments):
+  - [ ] Construct controlled test pothole with known depth
+  - [ ] Fill with clear water, measure both sensors
+  - [ ] Fill with turbid/muddy water, measure both sensors
+  - [ ] Test different incidence angles (vehicle positions)
+  - [ ] Document: water surface return vs bottom return for each sensor
+  - [ ] If neither resolves bottom → document limitation
+  - [ ] If bathymetric LiDAR access available → comparative test
+
+Phase 5 (System Hardening):
   - [ ] jetson_clocks + fan max script
   - [ ] Thermal throttling monitor + graceful degradation
   - [ ] Continuous 4-hour soak test
   - [ ] Memory/swap tuning
+  - [ ] Power budget validation (all sensors active)
 
 ================================================================================
 END OF SENSOR INTEGRATION PLAN
+================================================================================
+
+
+APPENDIX A: DEPTH SENSING RESEARCH SUMMARY (2026-09-25)
+--------------------------------------------------------------------------------
+
+A.1 TECHNOLOGY LANDSCAPE: STEREO, TOF, STRUCTURED LIGHT, LIDAR
+
+| Technology                    | Principle                           | Outdoor/Sunlight Robustness          | Key Limitation                             |
+|-------------------------------|-------------------------------------|--------------------------------------|--------------------------------------------|
+| Passive stereo (ZED)          | Triangulation from two RGB          | Bright sunlight (needs ambient)      | Fails on low-texture (wet asphalt)         |
+| Active IR stereo (RealSense)  | Triangulation + IR pattern          | Good; degrades facing sun            | IR pattern washed out in direct sun        |
+| Structured light (Kinect)     | Known IR pattern projected          | Poor — indoor tech                   | Unusable outdoors in daylight              |
+| Time-of-Flight (Azure Kinect) | Phase/pulse delay of IR/laser       | Weak-moderate; ambient IR raises noise| Low resolution; degrades in sun           |
+| Scanning LiDAR, 905nm         | Scanned laser ToF, sparse 3D pts    | Strong — light-independent           | Sparse at range; no submerged bottom       |
+| Bathymetric LiDAR, 532nm      | Green laser for water penetration   | Strong, purpose-built                | Expensive, survey-grade                    |
+| Monocular learned depth       | Single RGB, network-inferred depth  | As robust as RGB camera              | Relative, scale-ambiguous only             |
+
+Key findings:
+- Active IR stereo (RealSense) sits closer to LiDAR in outdoor robustness than
+  structured light or ToF, because depth comes from triangulation between two
+  IR sensors' own images, not from a single active signal.
+- No non-bathymetric technology (stereo, ToF, structured light, 905nm LiDAR)
+  should be assumed capable of measuring a submerged pothole bottom. Bathymetric
+  532nm green-wavelength LiDAR is the only technology designed for this.
+
+A.2 INTEL REAL SENSE D455 / D455f — DETAILED SPECIFICATIONS
+
+| Parameter               | D455                          | D455f                         |
+|-------------------------|-------------------------------|-------------------------------|
+| Depth technology        | Active IR stereo, global shut | Active IR stereo, global shut + IR-pass filter |
+| Stereo baseline         | 95 mm                         | 95 mm                         |
+| Depth FOV               | 86° × 57° (±3°)               | 87° ± 3° × 58° ± 3°           |
+| Depth resolution/rate   | Up to 1280×720 @ 90 fps       | Up to 1280×720 @ 90 fps       |
+| RGB resolution/rate     | Up to 1280×800 @ 30 fps       | Up to 1280×800 @ 60 fps (low res) |
+| Operating range         | 0.6–6m (Intel); ~10-20m fav.  | 0.6m–over 6m, varies          |
+| Depth accuracy          | <2% error at 4m               | <2% error at 4m               |
+| IMU                     | Yes (6-DoF)                   | Yes (6-DoF)                   |
+| IR filter               | None                          | CLAREX NIR-75N IR-pass filter |
+| IP rating               | None (D456/D457 for IP65)     | None (D456/D457 for IP65)     |
+| Interface               | USB-C 3.1 Gen 1               | USB-C 3.1 Gen 1               |
+| Indicative price (India)| ~₹45,000–₹46,000              | ~₹57,000                      |
+
+Outdoor considerations:
+- Works well in sunlight except when facing directly into sun
+- Heat itself is not the issue; strong ambient IR from sun washes out pattern
+- D455f IR-pass filter resolves reflection artifacts, recommended for outdoor
+- Wet/specular roads cause IR pattern dropout → invalid depth on water
+- No IP rating (D456/D457 for IP65) — needs enclosure for vehicle mount
+
+RealSense role: Fast, low-cost baseline for PoC; factory RGB-depth aligned;
+cross-validation baseline against LiDAR in 0-6m overlap.
+
+A.3 LIDAR VS REAL SENSE — ROLE COMPARISON
+
+| Approach                 | Measures                    | Strength                          | Weakness                         | Role                        |
+|--------------------------|-----------------------------|-----------------------------------|----------------------------------|-----------------------------|
+| RGB + YOLOv8 (2D)        | Class + 2D bbox/mask        | Low cost, always-on semantic      | No metric depth                  | Mandatory semantic front    |
+| RealSense D455f          | Dense per-pixel depth       | Cheap, USB, no extrinsics needed  | Short range; sun/water issues    | Early PoC + close-range val |
+| Scanning LiDAR (Mid-360) | Sparse 3D point cloud       | Light-indep, robust, long-range   | Needs extrinsics; sparse on small| Primary geometric sensor    |
+| Bathymetric LiDAR (532nm)| Green laser, water penetrat| Water bottom potential            | Expensive, survey-grade          | Phase 2 water study         |
+
+A.4 PHYSICAL MOUNTING GEOMETRY (LiDAR + Camera)
+
+- Mount camera and LiDAR close together, both pointing forward and slightly
+  downward (10°-15° pitch) to observe road ahead
+- Baseline ≤10cm between LiDAR and camera (minimize parallax for projection)
+- They do NOT need identical FOV or same physical point — overlap is what
+  matters; parallax is modeled by extrinsic calibration
+- Forward-and-downward orientation preferred (detect pothole before reaching)
+- RealSense unit: co-located with RGB, factory-aligned (no extrinsics needed)
+
+A.5 COORDINATE TRANSFORMATION (LiDAR → Camera)
+
+LiDAR point: P_L = [X_L, Y_L, Z_L]^T in LiDAR frame
+Camera point: P_C = R · P_L + t
+where R = 3×3 rotation matrix, t = translation vector
+
+Camera projection (pinhole model):
+u = fx · Xc / Zc + cx
+v = fy · Yc / Zc + cy
+
+RealSense: no R,t needed — depth map already pixel-aligned to its RGB stream.
+librealsense `align` utility maps depth → camera pixel grid directly.
+
+A.6 SUPERIMPOSITION MEANING
+
+"Superimposition" = software calculates where each 3D LiDAR point projects in
+the camera's 2D image:
+LiDAR point cloud → LiDAR-to-camera R,t → camera projection → pixel (u,v)
+→ draw/associate point with camera frame.
+
+Result: colorized camera view with LiDAR points overlaid, or programmatically
+intersect projected points with YOLO pothole bbox/mask.
+
+A.7 YOLO + DEPTH FUSION ARCHITECTURE
+
+Semantic (YOLO): 'Where is pothole and what class?'
+Geometric (LiDAR/RealSense): 'What is 3D geometry in that region?'
+
+Pipeline:
+1. RGB frame → YOLOv8 → pothole bbox / segmentation mask
+2. LiDAR: point cloud → R,t transform → project to camera pixels
+   RealSense: depth map already in camera pixel grid
+3. Filter points/pixels inside pothole ROI/mask
+4. Fit local road plane from surrounding points
+5. Pothole depth = perpendicular distance from plane to pothole points
+
+A.8 DEPTH ESTIMATION METHODOLOGY
+
+Do NOT use raw sensor distance to pothole directly. Vehicle/sensor/road
+orientations vary, and road is not a perfect horizontal plane.
+
+Method:
+1. Surrounding road points → fit local reference plane:
+   a·x + b·y + c·z + d = 0
+2. Perpendicular distance from point to plane:
+   distance = |a·x + b·y + c·z + d| / √(a² + b² + c²)
+3. Use physically meaningful vertical/depth component per vehicle frame
+
+Applies to both LiDAR points and RealSense 3D points (deprojected from depth).
+
+A.9 MINIMAL PROJECTION CODE (LiDAR → Camera)
+
+```python
+P_lidar = np.array([X, Y, Z])
+P_camera = R @ P_lidar + t
+Xc, Yc, Zc = P_camera
+if Zc > 0:
+    u = fx * Xc / Zc + cx
+    v = fy * Yc / Zc + cy
+    cv2.circle(frame, (int(u), int(v)), 3, color, -1)
+```
+
+RealSense equivalent: `depth_frame.get_distance(u, v)` gives depth in meters;
+`rs.rs2_deproject_pixel_to_point(intrin, [u, v], depth)` gives 3D point.
+
+A.10 CALIBRATION REQUIREMENTS
+
+- Camera intrinsics: fx, fy, cx, cy, distortion coefficients
+- LiDAR-camera extrinsics: R (3×3), t (3×1) — NOT needed for RealSense RGB-depth
+- Temporal sync: camera and LiDAR observations ≈ same instant (GNSS PPS + timestamps)
+- Mechanical stability: bracket must prevent vibration/movement post-calibration
+- Validation: project LiDAR points onto known targets at several distances;
+  for RealSense, validate reported depth vs manual reference at 1m, 3m, 5m
+
+A.10 WATER-FILLED POTHOLES — EXPERIMENTAL STUDY DESIGN
+
+Conventional 905nm LiDAR + RealSense D455f: both return water surface, not
+submerged bottom (IR/NIR absorbed/scattered by water). Bathymetric 532nm
+green-wavelength LiDAR is the specialized category for this.
+
+Controlled test protocol:
+1. Construct depression with known dimensions
+2. Progressively add water: dry → shallow clear → deep clear → turbid/muddy
+3. Record: true depth, water depth, sensor returns
+4. Conditions: incidence angles, ranges, times of day
+5. Output: water-surface return vs submerged-bottom return for each sensor
+
+If neither LiDAR nor RealSense resolves bottom → document limitation.
+If bathymetric 532nm LiDAR available → comparative test.
+
+A.11 RISKS & LIMITATIONS
+
+- LiDAR point density may be insufficient for small potholes at speed
+- RealSense: 6m recommended range; degrades in direct sun, water, low texture
+- D455f recommended over D455 for outdoor (IR-pass filter)
+- No IP rating on D455/D455f → D456/D457 for IP65 if exposed
+- Water/rain/fog/dust/reflective surfaces affect both sensors
+- Calibration errors + timestamp offsets → projection misalignment
+- Bounding-box fusion includes normal road around pothole → segmentation preferred
+- Neither LiDAR nor RealSense should be marketed as bathymetric
+
+A.12 RECOMMENDED NEXT STEPS (from Research)
+
+1. Prototype RealSense D455f as low-cost baseline on Jetson Orin Nano
+2. Select Livox Mid-360/Mid-360S as conventional LiDAR prototype
+3. Obtain SDK/ROS2 drivers, verify Jetson compatibility
+4. Mount camera + LiDAR rigidly side-by-side, forward/downward
+5. Calibrate camera intrinsics + LiDAR-camera extrinsics
+6. Implement live point-cloud visualization
+7. Implement LiDAR→camera projection, verify alignment
+8. Integrate YOLOv8 + filter projected LiDAR points / RealSense depth by ROI
+9. Upgrade to segmentation for precise geometry
+10. Fit local road plane → calculate pothole depth from each sensor
+11. Validate against manual measurements at multiple ranges/conditions
+12. Conduct controlled water-filled pothole tests with both sensors
+13. If neither resolves bottom → investigate 532nm bathymetric LiDAR access
+
+================================================================================
+END OF APPENDIX A
 ================================================================================
