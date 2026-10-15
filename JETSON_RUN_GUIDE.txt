@@ -1,0 +1,175 @@
+================================================================================
+JETSON ORIN NANO QUICK-START GUIDE
+================================================================================
+Date: 2026-10-15
+Project: CDAC Pothole Detection — Jetson Orin Nano
+Purpose: Step‑by‑step checklist to run the full anomaly‑detection pipeline
+         on the Jetson Orin Nano (from raw frames to trained model).
+--------------------------------------------------------------------------------
+
+PREREQUISITES
+-------------
+- Jetson Orin Nano with JetPack R36.4+ (CUDA, cuDNN, TensorRT, Python 3.10+).
+- Camera (CSI/USB) connected and streaming.
+- Sufficient storage (~20 GB) for frames, annotations, models.
+- User is in the `inference/` directory of the cloned repository.
+
+STEP 0: PREPARE THE ENVIRONMENT
+---------------------------------
+1. Install Python dependencies (if not already done):
+   $ cd inference
+   $ pip install -r requirements.txt   # installs torch, ultralytics, fastapi, etc.
+   # Ensure torch is the JetPack‑compatible build (check with `python -c "import torch; print(torch.__version__)"`).
+
+2. Verify the base model exists:
+   $ ls -l best.pt
+   # Should be present; this is the pretrained pothole model.
+
+3. (Optional) Enable maximal GPU clocks for benchmarking:
+   $ sudo jetson_clocks
+   # Remember to disable after testing to avoid overheating.
+
+STEP 1: CAPTURE FRAMES (RAW DATA)
+---------------------------------
+Option A: Use existing video file
+   $ mkdir -p raw_frames
+   $ ffmpeg -i 20260912_102451.mp4 -vf fps=10 raw_frames/frame_%06d.jpg
+   # Adjust fps as needed.
+
+Option B: Live capture (requires a capture script)
+   # TODO: run your multi‑sensor capture script (see SENSOR_INTEGRATION_PLAN.txt)
+   # For now, assume you have a folder `raw_frames/` with JPEG/PNG images.
+
+STEP 2: PRE‑ANNOTATION (RUN YOLO ON FRAMES)
+-------------------------------------------
+$ python -m annotate.preannotate \
+    --source raw_frames \
+    --out annotations \
+    --conf 0.25 \
+    --image-size 640 \
+    --device cuda:0   # use GPU; fallback to cpu if needed
+
+Output:
+  - annotations/manifest.json          (frame registry)
+  - annotations/predictions.json       (rich detections)
+  - annotations/labels/*.txt           (YOLO 5‑column labels)
+
+STEP 3: LAUNCH THE ANNOTATION UI
+---------------------------------
+$ python -m annotate.annotation_app   # defaults to http://127.0.0.1:8765
+
+Open a browser on the Jetson (or any host on the same LAN) and:
+  - Review each frame, correct boxes, change class/severity/confidence.
+  - Mark false positives with the “Ignore (false positive)” checkbox.
+  - Add telemetry (GPS, IMU) and environment (lux, surface, weather) if available.
+  - Click “Export dataset” when finished.
+
+Exported artifacts appear in `annotations/export/`:
+  - labels/            (positive YOLO labels)
+  - labels_ignore/     (ignore/false‑positive labels)
+  - payloads/          (per‑frame C‑DAC JSON)
+  - payloads.jsonl     (combined stream)
+  - annotated/         (frames with boxes drawn)
+  - coco/annotations.json (COCO dataset)
+  - manifest.json      (frame registry)
+
+STEP 4: RETRAIN THE MODEL (PYTORCH → ONNX → TENSORRT)
+------------------------------------------------------
+# Basic retrain (PyTorch only)
+$ python -m annotate.train_pipeline \
+    --annotations annotations \
+    --model best.pt \
+    --epochs 30
+
+# With hard‑negative mining (ignore regions as class 10)
+$ python -m annotate.train_pipeline \
+    --annotations annotations \
+    --model best.pt \
+    --epochs 30 \
+    --ignore-as-class
+
+# Add TensorRT engine build (FP16)
+$ python -m annotate.train_pipeline \
+    --annotations annotations \
+    --model best.pt \
+    --epochs 30 \
+    --ignore-as-class \
+    --tensorrt
+
+Outputs:
+  - runs/annotate_train/*                (training logs, checkpoints)
+  - best_retrained.pt                    (copy of the best PyTorch weights)
+  - best.onnx                            (ONNX export)
+  - best_fp16.engine                     (TensorRT FP16 engine, if --tensorrt used)
+
+STEP 5: DEPLOY THE RETRAINED MODEL
+----------------------------------
+# Replace the baseline model with the retrained one (keep a backup)
+$ cp best.pt best.pt.backup
+$ cp best_retrained.pt best.pt
+
+# Restart the Jetson services to pick up the new model
+$ sudo systemctl restart pothole-runner@$USER pothole-api@$USER
+
+# Verify the service is using the new model
+$ journalctl -u pothole-runner@$USER -f   # look for “Model … on cuda:0”
+
+STEP 6: VALIDATE THE TENSORRT ENGINE (OPTIONAL)
+------------------------------------------------
+If you built a TensorRT engine, run the accuracy/speed comparison:
+
+$ python -m annotate.validate_engine \
+    --model best.pt \
+    --engine best_fp16.engine \
+    --frames annotations/export/annotated   # or use raw frames
+    --output validation_report.json
+
+The report includes:
+  - PyTorch vs TensorRT latency (ms/frame, FPS)
+  - Matched/missed/false‑positive counts
+  - Mean IoU and max confidence delta
+  - Use this to gate deployment (e.g., require <5% missed detections).
+
+STEP 7: MONITORING & MAINTENANCE
+---------------------------------
+- Check service logs: `journalctl -u pothole-runner@$USER -f`
+- Monitor GPU utilization: `tegrastats`
+- Ensure storage does not fill up; prune old exports if needed.
+- To update the model again, repeat steps 2‑6.
+
+--------------------------------------------------------------------------------
+QUICK REFERENCE COMMANDS
+------------------------
+# Pre‑annotation
+python -m annotate.preannotate --source raw_frames --out annotations
+
+# Start annotation UI
+python -m annotate.annotation_app
+
+# Retrain (with ignore‑as‑class & TensorRT)
+python -m annotate.train_pipeline --annotations annotations \
+    --model best.pt --epochs 30 --ignore-as-class --tensorrt
+
+# Deploy
+cp best_retrained.pt best.pt
+sudo systemctl restart pothole-runner@$USER pothole-api@$USER
+
+# Validate engine
+python -m annotate.validate_engine --model best.pt --engine best_fp16.engine \
+    --frames annotations/export/annotated --output validation_report.json
+
+--------------------------------------------------------------------------------
+NOTES
+-----
+- All paths are relative to the `inference/` directory.
+- Adjust `--conf`, `--image-size`, `--epochs`, `--batch` as needed.
+- If you only have CPU, drop `--device cuda:0` or set it to cpu.
+- The annotation UI must be running to export; you can run it in a tmux/screen session.
+- For headless operation (no browser), use the API directly:
+    POST /api/frames/{id}   with JSON detections
+    POST /api/frames/{id}/meta with telemetry/environment
+  but the UI is the simplest way to correct detections.
+
+================================================================================
+END OF JETSON ORIN NANO QUICK-START GUIDE
+================================================================================
