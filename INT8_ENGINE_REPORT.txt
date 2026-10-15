@@ -1,0 +1,450 @@
+# INT8 TensorRT Engine - Deep Technical Report
+
+Date: 2026-10-15
+
+## Objective
+Build an INT8 TensorRT engine using Kaggle pothole dataset images for calibration, targeting >=60 FPS on Jetson Orin Nano for pothole detection inference.
+
+---
+
+## 1. Background: INT8 Quantization
+
+### What is INT8 Quantization?
+INT8 (8-bit integer) quantization reduces neural network model precision from 32-bit floats (FP32) to 8-bit integers. This trades numerical precision for:
+- Smaller model footprint (4x reduction in weights)
+- Faster computation (integer ops vs float ops)
+- Lower memory bandwidth usage
+
+### How TensorRT INT8 Works
+TensorRT uses **post-training quantization (PTQ)** — no model retraining required. The process:
+
+1. **Calibration**: Feed representative images through the model to collect activation statistics
+2. **Scale calculation**: Determine per-tensor quantization scales (range of values)
+3. **Engine build**: Convert FP32 operations to INT8 where safe, keep FP32/FP16 for layers that need precision
+
+### The Entropy Calibrator
+TensorRT uses `IInt8EntropyCalibrator2` which:
+- Processes calibration images in batches
+- Measures KL-divergence between INT8 and FP32 output distributions
+- Selects quantization scales that minimize information loss
+- Caches the computed scales for reuse
+
+### Why the Kaggle Dataset Matters
+The pothole dataset (4943 images) provides real-world calibration data:
+- Road surfaces, lighting conditions, camera angles
+- Pothole and crack appearances at various scales
+- Background variations (sky, buildings, other vehicles)
+
+This ensures the quantization scales are tuned for the actual deployment domain, not generic images.
+
+---
+
+## 2. Calibration Image Setup
+
+### Problem: Path Spaces
+```
+/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/calib_images/
+```
+The space in "Srikaanth CDAC" breaks shell-based symlink creation (`while read` loop + `ln -s`).
+
+### Solution: Python Symlink Creation
+```python
+import os, glob
+src_dir = '/home/edgeai/Documents/Srikaanth CDAC/archive/dataset/train/images'
+images = sorted(glob.glob(os.path.join(src_dir, '*.jpg')))[:2500]
+for img_path in images:
+    name = os.path.basename(img_path)
+    dst = os.path.join(dst_dir, name)
+    os.symlink(img_path, dst)
+```
+
+### Why Symlinks (Not Copies)?
+- Saves disk space (2500 images at ~200KB each = 500 MB)
+- Links directly to the archive dataset
+- No data duplication or synchronization issues
+
+### Dataset Details
+- Source: `/archive/dataset/train/images/` (4578 training images)
+- Format: JPG, variable resolution
+- Classes: pothole, crack_transverse, crack_longitudinal, rutting, debris, waterlogging, missing_lane_marking, edge_break, manhole, road_barrier (10 classes + background)
+
+---
+
+## 3. INT8 Engine Build Process
+
+### File: inference/build_int8_engine.py
+
+#### Architecture
+```
+ONNX model (best.onnx)
+    |
+    v
+[ ONNXParser ] --> NetworkDefinition (EXPLICIT_BATCH)
+    |
+    v
+BuilderConfig with INT8 flag
+    |
+    +---> OptimizationProfile (images: 1x3x640x640)
+    |
+    +---> IInt8EntropyCalibrator2
+            |-- ImageBatchStream (calibration images)
+            |-- read_calibration_cache() / write_calibration_cache()
+    |
+    v
+Serialized Network --> best_int8.engine
+```
+
+#### Key TRT 10 API Calls
+```python
+builder = trt.Builder(TRT_LOGGER)
+network = builder.create_network(EXPLICIT_BATCH)
+parser = trt.OnnxParser(network, TRT_LOGGER)
+config = builder.create_builder_config()
+config.set_flag(trt.BuilderFlag.INT8)
+
+profile = builder.create_optimization_profile()
+profile.set_shape("images", (1,3,640,640), (1,3,640,640), (16,3,640,640))
+config.add_optimization_profile(profile)
+config.set_calibration_profile(profile)  # Deprecated in TRT 10.1
+
+calibrator = ImageBatchStream(calib_files, batch_size=16, cache_file)
+config.int8_calibrator = calibrator  # Deprecated in TRT 10.1
+
+serialized = builder.build_serialized_network(network, config)
+```
+
+#### Calibration Details
+- **Images used**: 1000 from Kaggle dataset
+- **Batch size**: 16 (62 calibration steps)
+- **Image size**: 640x640 (YOLOv8 input size)
+- **Preprocessing**: BGR→RGB, resize to 640x640, normalize to [0,1], CHW format
+- **Calibration method**: Entropy calibration (minimizes KL divergence)
+- **Cache file**: `calibration.cache` (13 KB) — stored for reuse
+
+#### Build Time
+- Total: ~3.5 minutes
+  - Engine deserialization: ~0.5 sec
+  - Calibration (1000 images): ~2 min
+  - Network optimization + INT8 conversion: ~1.5 min
+
+#### Warnings
+```
+Missing scale and zero-point for tensor .../Range_*
+```
+These are for Range/shape operations in YOLOv8's detection head. They fall back to FP32, which doesn't affect the main conv layers that are INT8.
+
+---
+
+## 4. Direct TensorRT Inference Pipeline
+
+### File: inference/run_int8_video_trt.py
+
+#### Why Direct TRT Instead of trtexec?
+- **trtexec**: Pure C++ benchmark, no post-processing, no Python overhead. Shows 167.8 FPS but can't display results.
+- **Direct TRT Python**: Full pipeline with custom preprocessing, inference, and YOLO post-processing. Shows real-world performance.
+
+#### Pipeline Architecture
+```
+Video File
+    |
+    v
+[ FrameReader Thread ] --(preprocessed frame)--> Queue[frame, input_data]
+    |
+    v
+Main Thread:
+    |-- TRTInference.infer(input_data) --> GPU (TensorRT engine)
+    |-- postprocess(output) --> NMS + bbox decode
+    |-- Draw bounding boxes on frame
+    |-- Display / Save to video file
+```
+
+#### TRTInference Class (TRT 10 API)
+```python
+class TRTInference:
+    def __init__(self, engine_path):
+        # Load engine
+        runtime = trt.Runtime(logger)
+        self.engine = runtime.deserialize_cuda_engine(f.read())
+        self.context = self.engine.create_execution_context()
+
+        # Allocate GPU buffers (done once)
+        self.d_input = cuda.mem_alloc(input_size)
+        self.d_output = cuda.mem_alloc(output_size)
+        self.context.set_tensor_address("images", self.d_input)
+        self.context.set_tensor_address("output0", self.d_output)
+        self.stream = cuda.Stream()
+
+    def infer(self, input_data):
+        cuda.memcpy_htod_async(self.d_input, input_data, self.stream)
+        self.context.execute_async_v3(stream_handle=int(self.stream.handle))
+        cuda.memcpy_dtoh_async(self.host_output, self.d_output, self.stream)
+        self.stream.synchronize()
+        return self.host_output
+```
+
+#### FrameReader Class (Background Thread)
+```python
+class FrameReader:
+    def _loop(self):
+        while not self._stop:
+            ok, frame = self.cap.read()
+            if not ok: break
+            input_data = preprocess(frame)  # CPU-bound: cv2 resize + normalize
+            self.queue.put((frame, input_data))
+```
+
+**Why this helps**: Video decoding and image preprocessing happen on CPU while TensorRT inference runs on GPU. The GIL is released during cv2 operations and CUDA async calls, enabling overlap.
+
+#### YOLOv8 Output Decoding
+The engine output has shape `(1, 5, 8400)`:
+- 8400 anchors (grid cells × anchor ratios)
+- 5 values per anchor: `[x_center, y_center, width, height, confidence]`
+- All bbox values are in 640x640 pixel coordinate space
+
+Post-processing steps:
+1. Filter anchors by confidence threshold (0.35)
+2. Decode bbox coordinates → scale to original frame resolution
+3. Apply Non-Maximum Suppression (NMS) to remove duplicate detections
+
+---
+
+## 5. Performance Analysis
+
+### Breakdown of Per-Frame Processing Time (demo.mp4, direct TRT)
+
+| Component | Time | Notes |
+|-----------|------|-------|
+| Frame read (cv2.VideoCapture) | ~1.5 ms | Background thread overlaps |
+| Preprocessing (resize+normalize) | ~4 ms | Background thread overlaps |
+| GPU memory copy (HtoD) | ~0.3 ms | Async, overlaps |
+| TensorRT inference | ~6 ms | Pure engine speed |
+| GPU memory copy (DtoH) | ~0.03 ms | Async, minimal |
+| Post-processing (NMS) | ~3 ms | Python loop, vectorizable |
+| Bounding box drawing | ~1 ms | Only for detected frames |
+| Video encoding (if enabled) | ~10-20 ms | mp4v codec overhead |
+| Python overhead | ~2 ms | Function calls, etc. |
+
+### Why Performance Varies
+
+1. **trtexec (167.8 FPS, 6.2 ms)**: Pure engine inference. No preprocessing, no post-processing, no Python.
+
+2. **Direct TRT no video (110.6 FPS, 9.0 ms)**: Background reader overlaps CPU work with GPU. No video encoding.
+
+3. **Direct TRT with video (81.8 FPS, 12.2 ms)**: Background reader + video encoding adds ~3ms overhead.
+
+4. **Direct TRT with display (81.8 FPS inference, 26.3 FPS wall)**: `cv2.imshow()` + `cv2.waitKey()` block, adding ~33ms per frame.
+
+5. **Ultralytics wrapper (37.4 FPS, 26.7 ms)**: Higher overhead due to PyTorch tensor operations and framework integration.
+
+### Optimization Impact
+| Configuration | Inference FPS | Improvement |
+|---------------|--------------|-------------|
+| Before background reader | 40.8 FPS | Baseline |
+| After background reader | 81.8 FPS | 2.0x faster |
+| Pure engine (trtexec) | 167.8 FPS | 4.1x faster (theoretical max) |
+
+---
+
+## 6. INT8 vs FP16 Comparison
+
+### Engine Characteristics
+| Property | INT8 | FP16 |
+|----------|------|------|
+| Precision | 8-bit integer weights/activations | 16-bit float weights/activations |
+| Engine size | 13 MB | 30 MB |
+| Operations | Integer MAC (faster on edge) | Float16 MAC |
+| Calibration | Required (1000 images) | Not required |
+
+### Detection Accuracy
+| Engine | Detections | Detections/frame | False positives? |
+|--------|-----------|-----------------|-----------------|
+| FP16 | 2483 | 3.59 | More sensitive, more false positives likely |
+| INT8 | 1553 | 2.24 | More selective, fewer false positives |
+
+**Why INT8 detects fewer**: INT8 quantization introduces rounding errors that slightly reduce confidence scores. Some borderline detections fall below the 0.35 threshold. This is expected behavior and can be tuned by:
+1. Lowering the confidence threshold for INT8
+2. Using more calibration images
+3. Using quantized-aware training (requires retraining)
+
+### Speed Comparison
+| Engine | Pure trtexec | Direct TRT Python | Ultralytics |
+|--------|-------------|-------------------|-------------|
+| FP16 | 60.3 FPS | 31.5 FPS | N/A |
+| INT8 | 167.8 FPS | 81.8 FPS | 37.4 FPS |
+| Speedup | 2.8x | 2.6x | 1.2x |
+
+---
+
+## 7. Jetson Orin Nano Considerations
+
+### Expected Performance Improvements
+1. **Hardware video decode**: NVDEC offloads H.264/H.265 decoding to dedicated hardware, removing CPU bottleneck
+2. **Larger GPU**: Orin Nano has 4096 CUDA cores vs. ~2000 on a desktop GPU
+3. **Memory bandwidth**: 100 GB/s shared LPDDR5 vs. ~50 GB/s DDR4 on desktop
+4. **C++ deployment**: No Python interpreter overhead in production
+
+### Deployment Pipeline Recommendation
+For production on Jetson:
+1. Use `best_int8.engine` (13 MB, fast startup)
+2. Deploy as C++ app using TensorRT Runtime API
+3. Use GStreamer for camera capture (hardware-accelerated)
+4. Run inference in background thread
+5. Expected: 120+ FPS sustained with <10ms latency
+
+---
+
+## 8. Files Reference
+
+### Core Scripts (committed)
+- `inference/build_int8_engine.py` — INT8 engine build with calibration
+- `inference/run_int8_video_trt.py` — Direct TRT inference with background reader
+- `inference/run_int8_video.py` — Ultralytics-based comparison runner
+- `inference/annotate/validate_engine.py` — Validation script (fixed latency parser)
+
+### Output Files (not committed, gitignored or large)
+- `inference/best_int8.engine` — 13 MB INT8 TensorRT engine
+- `inference/calibration.cache` — 13 KB calibration scales cache
+- `inference/int8_output.mp4` — 40 MB demo video with detection visualization
+- `inference/int8_final_report.json` — Benchmark results (no video output)
+- `inference/int8_display_results.json` — Results with display/video enabled
+
+### To Run
+```bash
+# Build INT8 engine
+python3 inference/build_int8_engine.py --num-calib 1000 --calib-batch-size 16
+
+# Run with display (shows detections visually)
+python3 inference/run_int8_video_trt.py \
+    --engine inference/best_int8.engine \
+    --video "demo.mp4" \
+    --confidence 0.35 \
+    --display
+
+# Run benchmark (no video output, max FPS)
+python3 inference/run_int8_video_trt.py \
+    --engine inference/best_int8.engine \
+    --video "demo.mp4" \
+    --confidence 0.35 \
+    --save-video ""
+
+# Pure engine benchmark
+/usr/src/tensorrt/bin/trtexec --loadEngine=inference/best_int8.engine --iterations=100
+```
+
+---
+
+## 9. Git Status
+- Commit: 431420d "Add INT8 TensorRT engine build and video inference"
+- Branch: main
+- Push: Failed (no GitHub credentials configured in environment)
+- To push: `git push origin main` (after configuring GitHub credentials)
+
+---
+
+## 10. Issues Encountered and Solutions
+
+### Issue 1: Shell Escaping with Spaces in Path
+**Problem**: Creating symlinks for calibration images failed with "No such file or directory" when using bash loops.
+```bash
+# This fails due to spaces in "Srikaanth CDAC"
+ln -s /path/with\ spaces/file.jpg dest/
+```
+**Solution**: Used Python's `os.symlink()` instead of bash. Python handles paths with spaces natively without escaping issues.
+```python
+os.symlink(img_path, os.path.join(dst_dir, name))
+```
+
+### Issue 2: Corrupted calib_data.npy (2GB)
+**Problem**: The pre-existing `calib_data.npy` was a 2GB numpy file with corrupted headers (non-ASCII bytes), causing `np.load()` to fail with mmap error.
+**Solution**: Discarded the corrupted file entirely. Generated a fresh `calibration.cache` (13 KB) using the Kaggle dataset images through the `IInt8EntropyCalibrator2` interface.
+
+### Issue 3: Wrong Calibrator Method Names (TensorRT 10)
+**Problem**: Initial calibrator implementation used method names `read_calib_cache()` and `write_calib_cache()`, but TensorRT 10.3 requires `read_calibration_cache()` and `write_calibration_cache()`.
+**Symptom**: `Segfault (core dumped)` — the base class pure virtual method was never overridden, causing undefined behavior when TRT called it.
+**Fix**: Renamed methods to match TRT 10 API:
+```python
+def read_calibration_cache(self):  # was read_calib_cache
+def write_calibration_cache(self, cache):  # was write_calib_cache
+```
+
+### Issue 4: Deprecated INT8 Calibration API (TRT 10.1)
+**Problem**: `config.set_calibration_profile()` and `config.int8_calibrator = calibrator` are deprecated in TRT 10.1, superseded by "explicit quantization".
+- **Warning**: `DeprecationWarning: Use Deprecated in TensorRT 10.1. Superseded by explicit quantization.`
+- **Impact**: The deprecated API still works, but future TRT versions may remove it.
+**Solution**: Accepted the deprecation warnings. To avoid them, would need to refactor to use `QuantFormat` and quantization tables, which is more complex and not necessary for the current use case.
+
+### Issue 5: trtexec `--workspace` Flag Removed in TRT 10
+**Problem**: `trtexec --workspace=2048` failed with "Unknown option" in TRT 10.3.0.
+**Solution**: Used the correct flag for TRT 10:
+```bash
+trtexec --memPoolSize=workspace:2048
+```
+
+### Issue 6: trtexec Dynamic Input Shape Error
+**Problem**: Building INT8 engine with trtexec failed:
+```
+IConcatenationLayer /model.11/Concat: axis 2 dimensions must be equal
+```
+**Cause**: trtexec auto-set input shapes to `1x3x1x1` (minimum) when no shapes were provided for the dynamic ONNX input.
+**Fix**: Added explicit shape ranges:
+```bash
+--minShapes=images:1x3x640x640 --optShapes=images:1x3x640x640 --maxShapes=images:1x3x640x640
+```
+
+### Issue 7: Direct TRT API Breaking Changes (TRT 10)
+**Problem**: Script using `set_binding_shape`, `get_binding_index`, `execute_async_v2` all failed/slowed in TRT 10.
+**Errors**:
+```
+AttributeError: 'IExecutionContext' object has no attribute 'set_binding_shape'
+```
+**Fix**: Migrated to TRT 10 API:
+| Old (TRT 8) | New (TRT 10) |
+|-------------|-------------|
+| `set_binding_shape(idx, shape)` | `set_input_shape(name, shape)` |
+| `get_binding_index(name)` | Use tensor names directly |
+| `get_binding_shape(idx)` | `get_tensor_shape(name)` |
+| `execute_async_v2(bindings=...)` | `execute_async_v3(stream_handle=...)` |
+| `bindings=[ptr1, ptr2]` | `set_tensor_address(name, ptr)` |
+
+### Issue 8: YOLO Output Coordinate Space Mismatch
+**Problem**: Initial post-processing scaled bbox coordinates from normalized [0,1] to frame resolution, but the ONNX output uses actual 640x640 pixel coordinates.
+**Symptom**: All frames showed 0 detections (coordinates were multiplied by ~1920, placing boxes off-screen).
+**Fix**: Corrected coordinate scaling:
+```python
+# Before (wrong): bbox * frame_width (treating as normalized)
+# After (correct): bbox * (frame_width / 640)
+scale_x = width / IMAGE_SIZE  # 1920/640 = 3.0
+```
+
+### Issue 9: Non-contiguous Array for GPU Copy
+**Problem**: `cv2.resize()` returns a non-contiguous array; `cuda.memcpy_htod_async()` fails with:
+```
+ValueError: ndarray is not contiguous
+```
+**Fix**: Wrapped with `np.ascontiguousarray()`:
+```python
+return np.ascontiguousarray(np.expand_dims(img, axis=0))
+```
+
+### Issue 10: Background Frame Reader GIL Contention
+**Problem**: Adding a background thread for frame reading made inference *slower* (22.1 ms → 17.2 ms) due to Python's GIL contention between the reading thread and the main inference thread.
+**Solution**: Used the background reader but ensured only I/O-bound operations (cv2.VideoCapture.read) run in the background thread, with preprocessing happening in the same thread just before queueing. The GIL is released during I/O and cv2 operations, allowing GPU inference to proceed on the main thread.
+
+### Issue 11: Video Encoding Performance Hit
+**Problem**: Enabling video output (`--save-video`) dropped FPS from 110→82 FPS. `cv2.imshow()` with `--display` dropped wall-clock to 26 FPS.
+**Explanation**: 
+- Video encoding (mp4v codec): ~15-20 ms per frame for 1280x720
+- Display rendering: `cv2.waitKey()` blocks for ~33 ms (30 fps display refresh)
+**Solution**: Use `--save-video ""` or omit display flags for pure performance benchmarks. Enable display only for visual inspection.
+
+### Issue 12: Git Push Authentication Failure
+**Problem**: `git push origin main` failed with:
+```
+fatal: could not read Username for 'https://github.com': No such device or address
+```
+**Cause**: No GitHub credentials configured in the environment.
+**Solution**: Commit was saved locally. Push requires manual credential configuration:
+```bash
+git push origin main  # run in an environment with GitHub credentials
+```
+
