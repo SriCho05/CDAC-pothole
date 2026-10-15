@@ -148,13 +148,15 @@ def run_tensorrt_engine(engine_path: Path, frames, image_size: int) -> tuple[dic
     command = [
         trtexec,
         f"--loadEngine={engine_path}",
-        f"--shapes=images:3x{image_size}x{image_size}",
-        f"--warmUp=1000",
         f"--iterations={len(frames)}",
-        "--noDataTransfers",
+        "--warmUp=10",
     ]
+    env = dict(os.environ)
+    trt_bin = "/usr/src/tensorrt/bin"
+    if Path(trt_bin).is_dir():
+        env["PATH"] = trt_bin + os.pathsep + env.get("PATH", "")
     try:
-        result = subprocess.run(command, check=True, text=True, capture_output=True, timeout=600)
+        result = subprocess.run(command, check=True, text=True, capture_output=True, timeout=600, env=env)
         output = result.stdout + result.stderr
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         logger.warning("trtexec unavailable or failed: %s", exc)
@@ -162,8 +164,14 @@ def run_tensorrt_engine(engine_path: Path, frames, image_size: int) -> tuple[dic
 
     speed = {"avg_inf_ms": None, "fps": None}
     for line in output.splitlines():
-        if "Latency:" in line:
-            speed["avg_inf_ms"] = round(float(line.split("Latency:", 1)[1].split("ms", 1)[0].strip()), 3)
+        stripped = line.strip()
+        if "Latency:" in stripped and "mean =" in stripped:
+            if any(tag in stripped for tag in ("H2D", "D2H", "GPU Compute")):
+                continue
+            parts = stripped.split("Latency:", 1)[1].strip()
+            mean_part = parts.split("mean", 1)[-1]
+            mean_str = mean_part.split("=")[1].split("ms")[0].strip()
+            speed["avg_inf_ms"] = round(float(mean_str), 3)
             speed["fps"] = round(1000.0 / speed["avg_inf_ms"], 2)
     return speed, None
 

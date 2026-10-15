@@ -1,0 +1,17 @@
+{
+  "engine": "best_int8.engine",
+  "video": "/home/edgeai/Documents/Srikaanth CDAC/demo.mp4",
+  "video_fps": 25.0,
+  "video_resolution": "1280x720",
+  "total_frames_in_video": 692,
+  "frames_processed": 692,
+  "wall_time_sec": 6.85,
+  "wall_fps": 101.01,
+  "inference_only_avg_ms": 9.045,
+  "inference_only_fps": 110.56,
+  "inference_only_p95_ms": 13.788,
+  "total_processing_avg_ms": 9.537,
+  "total_processing_fps": 104.85,
+  "total_detections": 1553,
+  "detections_per_frame": 2.24
+}

@@ -1,0 +1,26 @@
+{
+  "model": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/best.pt",
+  "engine": "best_int8.engine",
+  "frames_tested": 50,
+  "image_size": 640,
+  "device": "cuda:0",
+  "pytorch": {
+    "avg_inf_ms": 45.067,
+    "std_ms": 5.109,
+    "min_ms": 38.653,
+    "max_ms": 60.921,
+    "p50_ms": 43.143,
+    "p95_ms": 55.302,
+    "fps": 22.19,
+    "detections_avg": 2.3
+  },
+  "tensorrt": {
+    "avg_inf_ms": 8.654,
+    "fps": 115.55
+  },
+  "accuracy": {
+    "note": "Detection comparison requires tensorrt python bindings on the Jetson.",
+    "pytorch_detections_avg": 2.3
+  },
+  "temperature_c": 49.593
+}

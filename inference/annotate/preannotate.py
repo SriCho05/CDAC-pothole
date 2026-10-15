@@ -99,8 +99,11 @@ def detect_frame(model, path: str, image_size: int, confidence: float, device: s
     unmapped = 0
     for result in results:
         for box in result.boxes:
-            name = str(result.names[int(box.cls)])
+            raw_cls = int(box.cls)
+            name = str(result.names.get(raw_cls, raw_cls))
             class_id = CLASS_IDS.get(name)
+            if class_id is None and name == "0":
+                class_id = 0
             if class_id is None:
                 unmapped += 1
                 continue
@@ -142,7 +145,7 @@ def run(args: argparse.Namespace) -> None:
     started = time.perf_counter()
     for position, (frame_id, entry) in enumerate(manifest.items(), start=1):
         detections, unmapped_here = detect_frame(
-            model, entry["path"], args.image_size, args.confidence, device
+            model, entry["path"], args.image_size, args.conf, device
         )
         unmapped += unmapped_here
         record = FrameRecord(
