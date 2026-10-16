@@ -1,0 +1,23 @@
+{
+  "source": "int8_output.mp4",
+  "frames_tested": 100,
+  "image_size": 640,
+  "nms_thres": 0.3,
+  "fp16_threshold": 0.25,
+  "int8_thresholds": [
+    0.15
+  ],
+  "results": [
+    {
+      "int8_threshold": 0.15,
+      "fp16_detections": 358,
+      "int8_detections": 386,
+      "detections_lost": -28,
+      "recovery_ratio": 1.0782,
+      "fp16_fps": 28.29,
+      "int8_fps": 15.63,
+      "speedup": 0.552,
+      "video": "threshold_comparison/fp16_vs_int8_conf0.15.mp4"
+    }
+  ]
+}

@@ -256,22 +256,21 @@ Post-processing steps:
 | Calibration | Required (1000 images) | Not required |
 
 ### Detection Accuracy
-| Engine | Detections | Detections/frame | False positives? |
-|--------|-----------|-----------------|-----------------|
-| FP16 | 2483 | 3.59 | More sensitive, more false positives likely |
-| INT8 | 1553 | 2.24 | More selective, fewer false positives |
+Both engines were run on the same 100 calibration frames (640x640, conf=0.25, NMS=0.45) on this Orin (JetPack R36.4.7, CUDA 12.6). Full per-frame detail: `inference/fp16_int8_comparison.json`.
 
-**Why INT8 detects fewer**: INT8 quantization introduces rounding errors that slightly reduce confidence scores. Some borderline detections fall below the 0.35 threshold. This is expected behavior and can be tuned by:
-1. Lowering the confidence threshold for INT8
-2. Using more calibration images
-3. Using quantized-aware training (requires retraining)
+| Engine | Detections | Detections/frame | Avg infer ms | FPS | Engine size |
+|--------|-----------|-----------------|--------------|-----|-------------|
+| FP16 | 198 | 1.98 | 25.4 | 39.4 | 30 MB |
+| INT8 | 124 | 1.24 | 11.2 | 89.6 | 13 MB |
 
-### Speed Comparison
-| Engine | Pure trtexec | Direct TRT Python | Ultralytics |
-|--------|-------------|-------------------|-------------|
-| FP16 | 60.3 FPS | 31.5 FPS | N/A |
-| INT8 | 167.8 FPS | 81.8 FPS | 37.4 FPS |
-| Speedup | 2.8x | 2.6x | 1.2x |
+**INT8 detects ~37% fewer objects (74 fewer detections, 1.60x FP16:INT8 count ratio)** while running ~2.3x faster (latency 25.4ms -> 11.2ms).
+
+**Why INT8 detects fewer**: INT8 quantization introduces rounding errors that slightly reduce confidence scores. Some borderline detections fall below the 0.25 threshold. This is expected and tunable:
+1. Lower the INT8 confidence threshold (e.g. 0.15-0.20) to recover missed detections.
+2. Use more / different calibration images.
+3. Use quantized-aware training (requires retraining — see `python -m annotate.train_pipeline --tensorrt --int8`).
+
+Per-frame confidence also shifts downward on INT8 for matching detections (e.g. frame `01_...`: FP16 max conf 0.89 -> INT8 max conf 0.75), so the same physical box can cross below threshold in INT8 even when FP16 keeps it.
 
 ---
 

@@ -66,6 +66,7 @@ class Workspace:
         self.labels_dir = root / "labels"
         self.manifest_path = root / "manifest.json"
         self.predictions_path = root / "predictions.json"
+        self.export_done_flag = root / ".export_done"
         self.lock = threading.Lock()
         self._label_cache: dict[str, tuple[int, list[Detection]]] = {}
         self.labels_dir.mkdir(parents=True, exist_ok=True)
@@ -221,6 +222,18 @@ class Workspace:
         )
         write_json_atomic(export_dir / "manifest.json", self.manifest)
         write_json_atomic(export_dir / "coco" / "annotations.json", build_coco(records))
+        # Signal that management has exported the dataset: the pipeline may proceed.
+        self.export_done_flag.write_text(
+            json.dumps(
+                {
+                    "exported": True,
+                    "frames": len(payloads),
+                    "detections": sum(len(payload["detections"]) for payload in payloads),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         return {
             "export_dir": str(export_dir),
             "frames": len(payloads),
@@ -331,6 +344,19 @@ async def api_clear_frame(frame_id: str):
 @app.get("/api/export")
 async def api_export():
     return get_workspace().export()
+
+
+@app.get("/api/pipeline/status")
+async def api_pipeline_status():
+    return {"exported": get_workspace().export_done_flag.exists()}
+
+
+@app.post("/api/pipeline/proceed")
+async def api_pipeline_proceed():
+    flag = get_workspace().export_done_flag
+    if flag.exists():
+        flag.unlink()
+    return {"ok": True, "exported": False}
 
 
 def main() -> None:
