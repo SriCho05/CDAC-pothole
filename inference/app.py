@@ -472,8 +472,8 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--engine", default=str(INT8_ENGINE_DEFAULT),
                         help="INT8 engine path for live inference")
-    parser.add_argument("--video", default=None,
-                        help="Video file (default: camera index 0)")
+    parser.add_argument("--video", default="/home/edgeai/Documents/Srikaanth CDAC/demo.mp4",
+                        help="Video file (default: /home/edgeai/Documents/Srikaanth CDAC/demo.mp4)")
     parser.add_argument("--conf", type=float, default=0.15,
                         help="INT8 confidence threshold")
     parser.add_argument("--nms", type=float, default=0.30,
