@@ -157,3 +157,66 @@ inference/app.py:377   - /api/potholes/clear endpoint
 inference/shell.html   - Dashboard UI with tabs, feed, map, events
 inference/annotate/annotate.html - Canvas annotation UI with auto-save
 inference/annotate/annotation_app.py - Annotation FastAPI sub-app
+
+=======================================================================
+ISSUES SOLVED (this session)
+=======================================================================
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | CUDA context crash — pycuda.autoinit context is main-thread-only; engine load/inference in a background thread threw `invalid device context - no currently active context` | TRTInference.__init__ calls cuda.Device(0).make_context() in the request thread and pushes/pops it around every infer_detections() call |
+| 2 | Box trails / flickering — boxes stacked every frame instead of updating in-place; boxes blinked when confidence hovered near threshold | BoxTracker with IoU matching (thresh 0.30) + 8-frame TTL: detections refresh existing boxes in-place, expired boxes drop cleanly |
+| 3 | Leaflet map crash — shell.html loaded Leaflet CSS but not JS; initMap() threw `L is undefined`, aborting boot() before startFeed() | Added `<script src="leaflet.js">` |
+| 4 | Feed wouldn't resume after stop — startFeed() only set feed.src but never called /api/feed/start, so _stop stayed True | startFeed() now POSTs to /api/feed/start, resetting _stop=False and rewinding video to frame 0 |
+| 5 | Pothole events not appearing in dashboard — no code wrote detections to SQLite | read_frame() now calls save_pothole() (~1/sec rate-limited) and saves annotated snapshots to /uploads/ |
+| 6 | Saved events opened local file path — image_path was /home/.../demo.mp4, which browsers cannot open | Snapshots saved to inference/uploads/, DB stores /uploads/pothole_*.jpg URL |
+| 7 | Annotation workspace empty — no frames/labels for the annotate tab | Pre-extracted 70 frames from demo.mp4 and ran INT8 inference to populate manifest.json, predictions.json, YOLO labels |
+| 8 | Annotations didn't transfer between frames — edits lost on Prev/Next without manual Save | loadFrame() auto-saves dirty state before navigating |
+| 9 | Video looped infinitely — feed never stopped after EOF | read_frame() sets _stop=True on EOF; plays once unless restarted |
+
+=======================================================================
+CURRENT ISSUES (open)
+=======================================================================
+
+| # | Issue | Severity |
+|---|-------|----------|
+| 1 | Pipeline FPS is slow (~13 FPS) — pure TRT infer is ~102 FPS but the whole FastAPI pipeline serves only ~13 FPS | High |
+| 2 | GPU OOM on restart — old Python process holds CUDA memory; restarting without killing first causes `out of memory` engine load failure | Medium |
+| 3 | Annotation server runs on separate port (8765) — iframe to /annotate works within app.py but the standalone annotate app is a separate process | Low |
+| 4 | demo.mp4 hardcoded — no dynamic video upload/switching in the UI yet | Low |
+
+=======================================================================
+FUTURE SOLUTIONS (incl. FPS improvement)
+=======================================================================
+
+FPS Issue — Pipeline is ~13 FPS; target is closer to model speed (~100 FPS)
+
+Root cause: The bottleneck is NOT the INT8 model (8.6-9.8 ms/frame = ~102 FPS). It is the stack around it:
+- OpenCV CPU preprocessing (VideoCapture.read, RGB convert, resize, NMS)
+- JPEG encoding per frame (quality 80)
+- HTTP multipart streaming overhead
+- SQLite writes (~1/sec)
+- BoxTracker + stats bookkeeping per frame
+- uvicorn threadpool context switching
+
+Actions to raise pipeline FPS:
+1. Batch/async preprocessing — move OpenCV resize/color conversion off the inference thread; a separate producer thread reads/preprocesses frames into a queue, inference thread consumes
+2. Skip JPEG encode when no client is connected — only encode/draw when /video-feed has an active subscriber
+3. Reduce SQLite write frequency — batch pothole events (write every N frames or on confidence change) instead of ~1/sec
+4. Use shared memory / zero-copy — pass frames between threads via numpy shared buffers instead of re-encoding
+5. Run inference on a dedicated CUDA stream with pinned host memory — eliminate memcpy overhead
+6. Lower JPEG quality or downscale output for the web feed (e.g., 640px max width) to reduce encode time
+7. Consider FP16 on Orin iGPU or quantized-aware retraining to close the confidence gap at the 0.25 threshold
+
+Other Future Improvements:
+
+| Area | Solution |
+|------|----------|
+| Dynamic video source | Add /api/video/set-source endpoint to switch videos without restart; file upload to uploads/ |
+| GPU memory cleanup | Add atexit / shutdown handler to explicitly free CUDA buffers and pop context on app exit |
+| Unified port | Merge annotation_app.py into app.py so everything runs on port 8000 (no iframe to 8765) |
+| GPS-tagged events | Integrate gnss.py to attach real lat/lng to pothole events instead of 0.0 |
+| Retraining loop | Connect Train tab output (new best_int8.engine) to auto-reload the running inference model without restart |
+| Health monitoring | Add GPU memory/temperature telemetry to /health endpoint |
+
+=======================================================================
