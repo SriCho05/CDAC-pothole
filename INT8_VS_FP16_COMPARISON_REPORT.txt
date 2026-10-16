@@ -136,3 +136,41 @@ Pure TensorRT execution (no cv2.imshow, no video streaming) runs at
 OpenCV CPU overhead (VideoCapture.read, RGB conversion, resize, NMS)
 dominates end-to-end time at this resolution. The INT8 model itself is
 not the bottleneck.
+
+-----------------------------------------------------------------------
+9. INT8 Benchmark WITH cv2.imshow Display
+-----------------------------------------------------------------------
+Source: /home/edgeai/Documents/Srikaanth CDAC/demo.mp4 (692 frames)
+Engine: inference/best_int8.engine (13 MB, INT8)
+Confidence: 0.15   NMS: 0.30   Input: 640x640
+
+Metric               Value
+------               -----
+Wall FPS             30.4
+Wall time            22.8 s
+Avg inference ms     19.2 ms / frame
+Total detections     2055 (2.97/frame)
+
+With live cv2.imshow window rendering + waitKey(1), wall FPS drops to
+30.4 because GUI drawing caps the loop. Infer time rises to 19.2 ms
+per frame due to display I/O interleaving.
+
+-----------------------------------------------------------------------
+10. INT8 Benchmark WITH Whole Pipeline (FastAPI UI on port 8000)
+-----------------------------------------------------------------------
+Source: /home/edgeai/Documents/Srikaanth CDAC/demo.mp4 (looped)
+Engine: inference/best_int8.engine (13 MB, INT8)
+Confidence: 0.15   NMS: 0.30   Input: 640x640
+
+Metric               Value
+------               -----
+Wall FPS             ~13
+Avg inference ms     ~24 ms / frame
+Active boxes         ~6-10 (temporal smoothed)
+
+Whole pipeline includes: FastAPI HTTP server, BoxTracker temporal
+smoothing (8-frame TTL), JPEG encoding per frame, SQLite event
+logging (~1/sec), multipart video streaming, and dashboard stats.
+~13 FPS is the end-to-end dashboard serving speed, not model speed.
+Model infer (8.6 ms) is unchanged; overhead comes from UI, I/O, and
+serialization layers.
