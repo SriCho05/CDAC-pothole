@@ -115,3 +115,24 @@ display_int8_live.py         - Live INT8 inference display
 display_fp16_vs_int8_h.py    - Side-by-side video generator
 display_fp16_int8_overlap.py - Overlapped video generator
 INT8_ENGINE_REPORT.txt       - Updated with new accuracy data
+
+-----------------------------------------------------------------------
+8. Standalone INT8 Benchmark on demo.mp4 (no display/UI)
+-----------------------------------------------------------------------
+Source: /home/edgeai/Documents/Srikaanth CDAC/demo.mp4 (692 frames)
+Engine: inference/best_int8.engine (13 MB, INT8)
+Confidence: 0.15   NMS: 0.30   Input: 640x640
+
+Metric               Value
+------               -----
+Infer FPS            116.3
+Avg inference ms     8.6 ms / frame
+Wall FPS             54.4
+Wall time            12.7 s
+Total detections     2055 (2.97/frame)
+
+Pure TensorRT execution (no cv2.imshow, no video streaming) runs at
+116.3 FPS, exceeding the 80 FPS target. Wall FPS is lower because
+OpenCV CPU overhead (VideoCapture.read, RGB conversion, resize, NMS)
+dominates end-to-end time at this resolution. The INT8 model itself is
+not the bottleneck.
