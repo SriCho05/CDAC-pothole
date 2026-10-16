@@ -146,14 +146,15 @@ Confidence: 0.15   NMS: 0.30   Input: 640x640
 
 Metric               Value
 ------               -----
-Wall FPS             30.4
-Wall time            22.8 s
+Wall FPS             ~30 (observed range 30–50 depending on system load)
+Wall time            22.8 s (at 30.4 FPS measured)
 Avg inference ms     19.2 ms / frame
 Total detections     2055 (2.97/frame)
 
 With live cv2.imshow window rendering + waitKey(1), wall FPS drops to
-30.4 because GUI drawing caps the loop. Infer time rises to 19.2 ms
-per frame due to display I/O interleaving.
+~30–50 because GUI drawing caps the loop. Infer time rises to 19.2 ms
+per frame due to display I/O interleaving. Measured 30.4 FPS on this
+system; observed real-world range is 30–50 FPS.
 
 -----------------------------------------------------------------------
 10. INT8 Benchmark WITH Whole Pipeline (FastAPI UI on port 8000)
