@@ -201,7 +201,20 @@ async function loadIndex() {
 }
 
 async function loadFrame(i) {
-  if (state.dirty && !confirm('Unsaved changes \u2014 load another frame anyway?')) return;
+  // Auto-save any pending edits so annotations transfer to the next frame
+  if (state.dirty && state.record) {
+    try {
+      const payload = { detections: state.boxes.map(b => ({
+        class_id: b.class_id, confidence: b.confidence,
+        bbox_xywh: b.bbox_xywh.map(v => Math.round(v * 100) / 100),
+        severity: b.severity, estimated_depth_cm: b.estimated_depth_cm, estimated_area_sqcm: b.estimated_area_sqcm,
+        ignore: b.ignore
+      }))};
+      await api('/api/frames/' + encodeURIComponent(state.record.frame_id), 'POST', payload);
+      state.dirty = false;
+      $('save-status').textContent = 'Auto-saved';
+    } catch (e) { /* ignore save errors during nav */ }
+  }
   state.index = clamp(i, 0, state.frames.length - 1);
   const summary = state.frames[state.index];
   state.record = await api('/api/frames/' + encodeURIComponent(summary.frame_id));

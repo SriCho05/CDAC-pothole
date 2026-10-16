@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CDAC Pothole Management</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root { color-scheme: dark; --bg:#081016; --panel:#101c24; --line:#24343d; --text:#e8f0f2; --muted:#8ea3aa; --accent:#62e6b4; --warn:#ffb86b; --bad:#ff7a7a; }
     * { box-sizing:border-box; } body { margin:0; background:radial-gradient(circle at 80% 0,#173b3d 0,#081016 40%); color:var(--text); font:14px system-ui,-apple-system,Segoe UI,sans-serif; }
@@ -115,12 +116,13 @@
         <div class="canvas-wrap"><img id="feed" class="feed" alt="Live annotated feed"></div>
         <div style="margin-top:8px;display:flex;gap:8px;">
           <button id="btnStart" class="secondary">Start/Restart</button>
+          <button id="btnStop" class="secondary">Stop</button>
           <span id="feedStatus" class="status">Initializing…</span>
         </div>
       </div>
       <div class="side">
         <div class="panel"><h2>GIS Pothole Map</h2><div id="map"></div><div id="mapMsg" class="footer" style="margin-top:6px">Loading map…</div></div>
-        <div class="panel" style="margin-top:12px"><h2>Saved Events</h2><div class="scroll"><table><thead><tr><th>Time</th><th>Confidence</th><th>GPS</th><th>Image</th></tr></thead><tbody id="events"><tr><td colspan="4" class="empty">Loading events…</td></tr></tbody></table></div></div>
+        <div class="panel" style="margin-top:12px"><h2>Saved Events</h2><button id="btnClearEvents" class="secondary" style="float:right;margin-top:-32px;">Clear All</button><div class="scroll"><table><thead><tr><th>Time</th><th>Confidence</th><th>GPS</th><th>Image</th></tr></thead><tbody id="events"><tr><td colspan="4" class="empty">Loading events…</td></tr></tbody></table></div></div>
       </div>
     </div>
   </div>
@@ -129,8 +131,9 @@
   <div class="tabpanel" id="panel-annotate">
     <div class="panel">
       <h2>Annotation Review</h2>
-      <p class="footer">Frames stay on this host. Review labels, set severity/depth/area, then click Export dataset.</p>
-      <iframe id="frameAnnotate" src="/annotate" style="width:100%;height:700px;border:none;border-radius:10px;"></iframe>
+    <p class="footer">Frames stay on this host. Review labels, set severity/depth/area, then click Export dataset.</p>
+    <iframe id="frameAnnotate" src="/annotate" style="width:100%;height:700px;border:none;border-radius:10px;"></iframe>
+    <div id="annotatedGallery" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -171,7 +174,7 @@ document.querySelectorAll('.tab').forEach(b => {
     b.classList.add('active');
     document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('active'));
     $(`panel-${b.dataset.tab}`).classList.add('active');
-    if (b.dataset.tab === 'annotate') $('frameAnnotate').src = '/annotate';
+    if (b.dataset.tab === 'annotate') { $('frameAnnotate').src = '/annotate'; refreshAnnotatedGallery(); }
     if (b.dataset.tab === 'timeline') refreshTimeline();
   });
 });
@@ -179,13 +182,27 @@ document.querySelectorAll('.tab').forEach(b => {
 // ---------- dashboard ----------
 const feed = $('feed');
 let feedSrc = '';
-function startFeed() {
+async function startFeed() {
+  try { await fetch('/api/feed/start', { method: 'POST' }); } catch (e) {}
   feed.src = '/video-feed';
   $('btnStart').textContent = 'Restart Feed';
   $('feedStatus').textContent = 'Live';
 }
 $('btnStart').addEventListener('click', startFeed);
+$('btnStop').addEventListener('click', async () => {
+  try { await fetch('/api/feed/stop', { method: 'POST' }); } catch (e) {}
+  $('feedStatus').textContent = 'Stopped';
+  $('btnStart').textContent = 'Start Feed';
+});
 $('btnRefresh').addEventListener('click', () => { startFeed(); refreshStats(); refreshEvents(); });
+$('btnClearEvents').addEventListener('click', async () => {
+  if (!confirm('Delete all saved pothole events?')) return;
+  try {
+    await fetch('/api/potholes/clear', { method: 'DELETE' });
+    refreshEvents();
+    $('save-status').textContent = 'Events cleared';
+  } catch (e) { $('save-status').textContent = 'Clear failed: ' + e.message; }
+});
 
 async function refreshStats() {
   try {
@@ -300,6 +317,28 @@ async function refreshTimeline() {
   } catch (e) { console.log('timeline err', e); }
 }
 
+async function refreshAnnotatedGallery() {
+  const gallery = $('annotatedGallery');
+  if (!gallery) return;
+  try {
+    const r = await fetch('/api/frames?filter=all');
+    const d = await r.json();
+    const frames = d.frames || [];
+    gallery.innerHTML = '';
+    const shown = frames.slice(0, 12);
+    if (!shown.length) {
+      gallery.innerHTML = '<div class="empty">No annotated frames yet.</div>';
+      return;
+    }
+    for (const f of shown) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-items:center;';
+      wrap.innerHTML = `<img src="/api/frames/${encodeURIComponent(f.frame_id)}/annotated?t=${Date.now()}" style="width:100%;height:140px;object-fit:cover;border:1px solid var(--line);border-radius:8px;"><div style="font-size:11px;color:var(--muted);text-align:center;">${f.frame_id}</div>`;
+      gallery.appendChild(wrap);
+    }
+  } catch (e) { gallery.innerHTML = '<div class="empty">Gallery load failed.</div>'; }
+}
+
 // ---------- boot ----------
 async function boot() {
   initMap();
@@ -309,6 +348,7 @@ async function boot() {
   refreshTimeline();
   setInterval(() => { refreshStats(); refreshEvents(); }, 4000);
   setInterval(refreshTimeline, 5000);
+  setInterval(refreshAnnotatedGallery, 4000);
 }
 boot();
 </script>

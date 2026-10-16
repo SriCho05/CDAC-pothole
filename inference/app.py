@@ -74,62 +74,129 @@ class MetaBody(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Inference engine (INT8 TensorRT) with background capture thread
+# Inference engine (INT8 TensorRT) - synchronous, runs in main thread
+# where the pycuda.autoinit CUDA context is active
 # ---------------------------------------------------------------------------
 
 class TRTInference:
     def __init__(self, engine_path: Path):
         logger = trt.Logger(trt.Logger.WARNING)
-        with open(engine_path, "rb") as f:
-            runtime = trt.Runtime(logger)
-            self.engine = runtime.deserialize_cuda_engine(f.read())
-        self.ctx = self.engine.create_execution_context()
-        self.input_name = "images"
-        self.output_name = "output0"
-        self.d_input = cuda.mem_alloc(trt.volume((1, 3, IMAGE_SIZE, IMAGE_SIZE)) * 4)
-        self.d_output = cuda.mem_alloc(trt.volume((1, 5, 8400)) * 4)
-        self.ctx.set_tensor_address(self.input_name, int(self.d_input))
-        self.ctx.set_tensor_address(self.output_name, int(self.d_output))
-        self.stream = cuda.Stream()
-        self.host_output = np.empty((1, 5, 8400), dtype=np.float32)
+        self.device_ctx = cuda.Device(0).make_context()
+        try:
+            with open(engine_path, "rb") as f:
+                runtime = trt.Runtime(logger)
+                self.engine = runtime.deserialize_cuda_engine(f.read())
+            self.ctx = self.engine.create_execution_context()
+            self.input_name = "images"
+            self.output_name = "output0"
+            self.d_input = cuda.mem_alloc(trt.volume((1, 3, IMAGE_SIZE, IMAGE_SIZE)) * 4)
+            self.d_output = cuda.mem_alloc(trt.volume((1, 5, 8400)) * 4)
+            self.ctx.set_tensor_address(self.input_name, int(self.d_input))
+            self.ctx.set_tensor_address(self.output_name, int(self.d_output))
+            self.stream = cuda.Stream()
+            self.host_output = np.empty((1, 5, 8400), dtype=np.float32)
+        finally:
+            self.device_ctx.pop()
 
     def infer_detections(self, frame, conf_thres, nms_thres):
-        h, w = frame.shape[:2]
-        sx = w / IMAGE_SIZE
-        sy = h / IMAGE_SIZE
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-        img = img.astype(np.float32) / 255.0
-        img = np.transpose(img, (2, 0, 1))
-        img = np.ascontiguousarray(np.expand_dims(img, axis=0))
-        cuda.memcpy_htod_async(self.d_input, img, self.stream)
-        self.ctx.execute_async_v3(stream_handle=int(self.stream.handle))
-        cuda.memcpy_dtoh_async(self.host_output, self.d_output, self.stream)
-        self.stream.synchronize()
-        pred = self.host_output[0]
-        pred = np.transpose(pred, (1, 0))
-        confs = pred[:, 4]
-        mask = confs >= conf_thres
-        dets = []
-        if np.any(mask):
-            f = pred[mask]
-            scores = f[:, 4].astype(np.float32)
-            cxs, cys, ws, hs = f[:, 0], f[:, 1], f[:, 2], f[:, 3]
-            x1s = (cxs - ws / 2) * sx
-            y1s = (cys - hs / 2) * sy
-            x2s = (cxs + ws / 2) * sx
-            y2s = (cys + hs / 2) * sy
-            boxes = np.column_stack([x1s, y1s, x2s, y2s]).astype(np.float32)
-            idx = cv2.dnn.NMSBoxes(boxes.tolist(), scores.tolist(), conf_thres, nms_thres)
-            if len(idx):
-                for i in idx.flatten():
-                    x1, y1, x2, y2 = boxes[i]
-                    dets.append({
-                        "bbox": [max(0, int(x1)), max(0, int(y1)),
-                                 min(w - 1, int(x2)), min(h - 1, int(y2))],
-                        "confidence": float(scores[i]),
-                    })
-        return dets
+        self.device_ctx.push()
+        try:
+            h, w = frame.shape[:2]
+            sx = w / IMAGE_SIZE
+            sy = h / IMAGE_SIZE
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+            img = img.astype(np.float32) / 255.0
+            img = np.transpose(img, (2, 0, 1))
+            img = np.ascontiguousarray(np.expand_dims(img, axis=0))
+            cuda.memcpy_htod_async(self.d_input, img, self.stream)
+            self.ctx.execute_async_v3(stream_handle=int(self.stream.handle))
+            cuda.memcpy_dtoh_async(self.host_output, self.d_output, self.stream)
+            self.stream.synchronize()
+            pred = self.host_output[0]
+            pred = np.transpose(pred, (1, 0))
+            confs = pred[:, 4]
+            mask = confs >= conf_thres
+            dets = []
+            if np.any(mask):
+                f = pred[mask]
+                scores = f[:, 4].astype(np.float32)
+                cxs, cys, ws, hs = f[:, 0], f[:, 1], f[:, 2], f[:, 3]
+                x1s = (cxs - ws / 2) * sx
+                y1s = (cys - hs / 2) * sy
+                x2s = (cxs + ws / 2) * sx
+                y2s = (cys + hs / 2) * sy
+                boxes = np.column_stack([x1s, y1s, x2s, y2s]).astype(np.float32)
+                idx = cv2.dnn.NMSBoxes(boxes.tolist(), scores.tolist(), conf_thres, nms_thres)
+                if len(idx):
+                    for i in idx.flatten():
+                        x1, y1, x2, y2 = boxes[i]
+                        dets.append({
+                            "bbox": [max(0, int(x1)), max(0, int(y1)),
+                                     min(w - 1, int(x2)), min(h - 1, int(y2))],
+                            "confidence": float(scores[i]),
+                        })
+            return dets
+        finally:
+            self.device_ctx.pop()
+
+
+BOX_TTL_FRAMES = 8  # how many frames a box stays visible after last detection
+
+
+class BoxTracker:
+    """Keeps detected boxes alive for N frames to prevent blinking/flickering.
+    Matches new detections to existing boxes by IoU so boxes are refreshed
+    in-place (no trails, no duplicates, no blinking)."""
+
+    def __init__(self, ttl: int = BOX_TTL_FRAMES, iou_thresh: float = 0.3):
+        self.ttl = ttl
+        self.iou_thresh = iou_thresh
+        self.boxes: list[dict] = []  # each: {bbox, confidence, ttl_left}
+
+    @staticmethod
+    def _iou(a, b):
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+        inter = iw * ih
+        if inter <= 0:
+            return 0.0
+        area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+        area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+        return inter / max(1.0, area_a + area_b - inter)
+
+    def update(self, detections: list[dict]) -> list[dict]:
+        # Decrement TTL on existing boxes
+        alive = [b for b in self.boxes if b["ttl_left"] > 0]
+        for b in alive:
+            b["ttl_left"] -= 1
+
+        # Match each new detection to an existing box by best IoU
+        for d in detections:
+            best_idx, best_iou = -1, 0.0
+            for j, b in enumerate(alive):
+                iou_v = self._iou(b["bbox"], d["bbox"])
+                if iou_v > best_iou:
+                    best_iou, best_idx = iou_v, j
+            if best_idx >= 0 and best_iou >= self.iou_thresh:
+                alive[best_idx]["bbox"] = d["bbox"]
+                alive[best_idx]["confidence"] = d["confidence"]
+                alive[best_idx]["ttl_left"] = self.ttl
+            else:
+                alive.append({
+                    "bbox": d["bbox"],
+                    "confidence": d["confidence"],
+                    "ttl_left": self.ttl,
+                })
+
+        self.boxes = alive
+        return [b for b in self.boxes if b["ttl_left"] > 0]
+
+    def clear(self):
+        self.boxes = []
 
 
 class InferenceLoop:
@@ -141,24 +208,16 @@ class InferenceLoop:
         self.every = every
         self.model = None
         self.cap = None
-        self.latest_jpeg = None
+        self.tracker = BoxTracker(ttl=BOX_TTL_FRAMES)
         self.stats = {"status": "starting", "fps": 0.0, "detections": 0,
                       "frames": 0, "last_frame_ms": 0.0}
-        self._stop = False
-        self._thread = None
+        self._t_start = time.perf_counter()
+        self._n_frames = 0
         self._lock = threading.Lock()
+        self._stop = False
+        self._last_save = 0
 
     def start(self):
-        self._stop = False
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-
-    def stop(self):
-        self._stop = True
-        if self._thread:
-            self._thread.join(timeout=5)
-
-    def _loop(self):
         try:
             self.model = TRTInference(self.engine_path)
         except Exception as e:
@@ -171,50 +230,63 @@ class InferenceLoop:
             self.stats["status"] = "error"
             return
         self.stats["status"] = "running"
-        frame_idx = 0
-        t_start = time.perf_counter()
-        n_frames = 0
-        while not self._stop:
-            ok, frame = self.cap.read()
-            if not ok:
-                if self.video_path:
-                    self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                break
-            if frame_idx % max(1, self.every) != 0:
-                frame_idx += 1
-                continue
-            frame_idx += 1
-            t0 = time.perf_counter()
-            dets = self.model.infer_detections(frame, self.conf, self.nms)
-            infer_ms = (time.perf_counter() - t0) * 1000
-            for d in dets:
-                x1, y1, x2, y2 = d["bbox"]
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"pothole {d['confidence']:.2f}",
-                            (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                            (0, 255, 0), 2)
-            ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if ok2:
-                with self._lock:
-                    self.latest_jpeg = buf.tobytes()
-            n_frames += 1
-            elapsed = time.perf_counter() - t_start
-            if elapsed >= 1.0:
-                with self._lock:
-                    self.stats["fps"] = round(n_frames / elapsed, 1)
-                    self.stats["detections"] = len(dets)
-                    self.stats["frames"] += n_frames
-                    self.stats["last_frame_ms"] = round(infer_ms, 1)
-                    self.stats["status"] = "running"
-                n_frames = 0
-                t_start = time.perf_counter()
-        if self.cap:
-            self.cap.release()
 
-    def get_frame(self):
+    def stop(self):
+        self._stop = True
+
+    def read_frame(self):
+        """Read one frame, run inference, return (jpeg_bytes, stats_delta)."""
+        if self.model is None or self.cap is None or self._stop:
+            return None, None
+        ok, frame = self.cap.read()
+        if not ok:
+            if self.video_path:
+                self._stop = True  # stop after playing once, no loop
+            return None, None
+        t0 = time.perf_counter()
+        dets = self.model.infer_detections(frame, self.conf, self.nms)
+        infer_ms = (time.perf_counter() - t0) * 1000
+
+        # Temporal smoothing: keep boxes alive across frames (no flicker, no trails)
+        active_boxes = self.tracker.update(dets)
+        for b in active_boxes:
+            x1, y1, x2, y2 = b["bbox"]
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, f"pothole {b['confidence']:.2f}",
+                        (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                        (0, 255, 0), 2)
+        ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ok2:
+            return None, None
         with self._lock:
-            return self.latest_jpeg
+            self.stats["frames"] += 1
+            self.stats["last_frame_ms"] = round(infer_ms, 1)
+            self.stats["detections"] = len(dets)
+            self.stats["active_boxes"] = len(active_boxes)
+            self.stats["status"] = "running"
+            self._n_frames += 1
+            elapsed = time.perf_counter() - self._t_start
+            if elapsed >= 1.0:
+                self.stats["fps"] = round(self._n_frames / elapsed, 1)
+                self._n_frames = 0
+                self._t_start = time.perf_counter()
+            # Persist pothole events to the dashboard (rate-limited to ~1/sec)
+            now = time.perf_counter()
+            if dets and now - self._last_save >= 1.0:
+                self._last_save = now
+                import uuid as _uuid
+                # Save an annotated snapshot to /uploads so the dashboard can open it
+                snap_name = f"pothole_{int(now*1000)}_{_uuid.uuid4().hex[:8]}.jpg"
+                snap_path = UPLOADS_DIR / snap_name
+                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(snap_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                snap_url = f"/uploads/{snap_name}"
+                for d in dets:
+                    x1, y1, x2, y2 = d["bbox"]
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    save_pothole("pothole", d["confidence"], 0.0, 0.0, snap_url)
+        return buf.tobytes(), dict(self.stats)
 
     def get_stats(self):
         with self._lock:
@@ -230,7 +302,7 @@ def get_inference() -> InferenceLoop:
     with _inference_lock:
         if _inference is None:
             engine = Path(os.getenv("INT8_ENGINE", str(INT8_ENGINE_DEFAULT)))
-            video = os.getenv("VIDEO_PATH")  # None -> camera
+            video = os.getenv("VIDEO_PATH", "/home/edgeai/Documents/Srikaanth CDAC/demo.mp4")
             conf = float(os.getenv("CONFIDENCE", "0.15"))
             nms = float(os.getenv("NMS", "0.30"))
             _inference = InferenceLoop(engine, video, conf, nms)
@@ -249,6 +321,15 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             label TEXT, confidence REAL, latitude REAL, longitude REAL,
             timestamp TEXT, image_path TEXT)""")
+        conn.commit()
+
+
+def save_pothole(label, confidence, lat, lng, image_path):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO potholes (label, confidence, latitude, longitude, timestamp, image_path) VALUES (?, ?, ?, ?, ?, ?)",
+            (label, confidence, lat, lng, datetime.now(timezone.utc).isoformat(), image_path),
+        )
         conn.commit()
 
 
@@ -278,8 +359,8 @@ async def video_feed():
     inf = get_inference()
 
     def gen():
-        while True:
-            jpeg = inf.get_frame()
+        while not inf._stop:
+            jpeg, _ = inf.read_frame()
             if jpeg is None:
                 time.sleep(0.01)
                 continue
@@ -294,9 +375,38 @@ async def video_feed_stats():
     return get_inference().get_stats()
 
 
+@app.post("/api/feed/stop")
+async def stop_feed():
+    inf = get_inference()
+    inf.stop()
+    return {"ok": True}
+
+
+@app.post("/api/feed/start")
+async def start_feed():
+    inf = get_inference()
+    inf._stop = False
+    inf.stats["status"] = "running"
+    # Reset video to the beginning for a fresh start
+    if inf.cap is not None:
+        inf.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    return {"ok": True}
+
+
 @app.get("/potholes")
 async def get_potholes():
     return {"potholes": get_all_potholes()}
+
+
+@app.delete("/api/potholes/clear")
+async def clear_potholes():
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("DELETE FROM potholes")
+            conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/local-status")

@@ -1,0 +1,3648 @@
+{
+  "demo_000000": {
+    "frame_id": "demo_000000",
+    "timestamp_unix_us": 1785332705904000,
+    "telemetry": {
+      "latitude": null,
+      "longitude": null,
+      "altitude_m": null,
+      "speed_kmh": null,
+      "heading_deg": null,
+      "imu_vibration_g": null
+    },
+    "environment": {
+      "lux": null,
+      "surface": null,
+      "weather": null
+    },
+    "detections": [
+      {
+        "class_id": 0,
+        "confidence": 0.7653368711471558,
+        "bbox_xywh": [
+          256.0,
+          216.0,
+          124.0,
+          32.0
+        ],
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 0.741862416267395,
+        "bbox_xywh": [
+          325.0,
+          340.0,
+          179.0,
+          67.0
+        ],
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 0.5936120748519897,
+        "bbox_xywh": [
+          350.0,
+          149.0,
+          79.0,
+          18.0
+        ],
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 0.2950320243835449,
+        "bbox_xywh": [
+          685.0,
+          287.0,
+          76.0,
+          20.0
+        ],
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 0.18829035758972168,
+        "bbox_xywh": [
+          920.0,
+          335.0,
+          359.0,
+          64.0
+        ],
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 1.0,
+        "bbox_xywh": [
+          747.67,
+          177.18,
+          249.82,
+          49.61
+        ],
+        "severity": "level_3",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 1.0,
+        "bbox_xywh": [
+          161.23,
+          251.59,
+          446.48,
+          67.33
+        ],
+        "severity": "level_3",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "class_id": 0,
+        "confidence": 1.0,
+        "bbox_xywh": [
+          166.54,
+          510.27,
+          659.09,
+          207.3
+        ],
+        "severity": "level_2",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ],
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000000.jpg"
+  },
+  "demo_000001": {
+    "frame_id": "demo_000001",
+    "timestamp_unix_us": 1785332706304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000001.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          227,
+          228,
+          130,
+          37
+        ],
+        "confidence": 0.6972577571868896,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          291,
+          384,
+          212,
+          94
+        ],
+        "confidence": 0.6156896352767944,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          712,
+          315,
+          78,
+          25
+        ],
+        "confidence": 0.557181179523468,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          340,
+          149,
+          83,
+          23
+        ],
+        "confidence": 0.5016672015190125,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          974,
+          370,
+          305,
+          98
+        ],
+        "confidence": 0.28121310472488403,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000002": {
+    "frame_id": "demo_000002",
+    "timestamp_unix_us": 1785332706704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000002.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          737,
+          353,
+          87,
+          33
+        ],
+        "confidence": 0.7429392337799072,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          183,
+          243,
+          148,
+          44
+        ],
+        "confidence": 0.7138482332229614,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          210,
+          451,
+          272,
+          139
+        ],
+        "confidence": 0.5734368562698364,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          326,
+          154,
+          89,
+          22
+        ],
+        "confidence": 0.5691883563995361,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          646,
+          229,
+          66,
+          21
+        ],
+        "confidence": 0.3554348647594452,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1091,
+          421,
+          188,
+          90
+        ],
+        "confidence": 0.2029804289340973,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000003": {
+    "frame_id": "demo_000003",
+    "timestamp_unix_us": 1785332707104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000003.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          814,
+          317,
+          121,
+          33
+        ],
+        "confidence": 0.7740330100059509,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          7,
+          333,
+          589,
+          114
+        ],
+        "confidence": 0.6853121519088745,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          134,
+          264,
+          173,
+          52
+        ],
+        "confidence": 0.6666611433029175,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          648,
+          246,
+          74,
+          23
+        ],
+        "confidence": 0.5316063761711121,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          283,
+          205,
+          174,
+          40
+        ],
+        "confidence": 0.40343672037124634,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000004": {
+    "frame_id": "demo_000004",
+    "timestamp_unix_us": 1785332707504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000004.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          824,
+          354,
+          164,
+          45
+        ],
+        "confidence": 0.7290995717048645,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          52,
+          288,
+          210,
+          63
+        ],
+        "confidence": 0.7203226089477539,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          653,
+          267,
+          83,
+          23
+        ],
+        "confidence": 0.6857473850250244,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          294,
+          163,
+          93,
+          30
+        ],
+        "confidence": 0.5190771818161011,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000005": {
+    "frame_id": "demo_000005",
+    "timestamp_unix_us": 1785332707904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000005.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          885,
+          397,
+          195,
+          64
+        ],
+        "confidence": 0.7804445028305054,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          312,
+          220,
+          82
+        ],
+        "confidence": 0.7491713762283325,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          668,
+          284,
+          86,
+          29
+        ],
+        "confidence": 0.7177513241767883,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          867,
+          605,
+          175,
+          104
+        ],
+        "confidence": 0.3173350691795349,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          213,
+          223,
+          210,
+          55
+        ],
+        "confidence": 0.27761515974998474,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000006": {
+    "frame_id": "demo_000006",
+    "timestamp_unix_us": 1785332708304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000006.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          955,
+          481,
+          258,
+          94
+        ],
+        "confidence": 0.7751061916351318,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          680,
+          318,
+          108,
+          34
+        ],
+        "confidence": 0.7308492064476013,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          358,
+          156,
+          107
+        ],
+        "confidence": 0.5953364372253418,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          251,
+          172,
+          118,
+          15
+        ],
+        "confidence": 0.4133267402648926,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          171,
+          249,
+          235,
+          56
+        ],
+        "confidence": 0.31110242009162903,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000007": {
+    "frame_id": "demo_000007",
+    "timestamp_unix_us": 1785332708704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000007.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          707,
+          366,
+          123,
+          44
+        ],
+        "confidence": 0.7272002696990967,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          118,
+          280,
+          269,
+          70
+        ],
+        "confidence": 0.5364351272583008,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          452,
+          374,
+          132,
+          42
+        ],
+        "confidence": 0.5346513390541077,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          428,
+          64,
+          47
+        ],
+        "confidence": 0.3218536972999573,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          223,
+          181,
+          134,
+          18
+        ],
+        "confidence": 0.30594658851623535,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          265,
+          243,
+          186,
+          34
+        ],
+        "confidence": 0.2756214141845703,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          860,
+          253,
+          419,
+          121
+        ],
+        "confidence": 0.2630273699760437,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1017,
+          613,
+          262,
+          103
+        ],
+        "confidence": 0.1623421013355255,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000008": {
+    "frame_id": "demo_000008",
+    "timestamp_unix_us": 1785332709104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000008.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          739,
+          440,
+          160,
+          66
+        ],
+        "confidence": 0.7894238233566284,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          199,
+          194,
+          143,
+          20
+        ],
+        "confidence": 0.63844895362854,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          53,
+          317,
+          311,
+          95
+        ],
+        "confidence": 0.6038918495178223,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          419,
+          181,
+          96,
+          19
+        ],
+        "confidence": 0.5620284676551819,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          452,
+          455,
+          131,
+          56
+        ],
+        "confidence": 0.3542647361755371,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          922,
+          286,
+          357,
+          145
+        ],
+        "confidence": 0.2372400462627411,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1009,
+          508,
+          270,
+          90
+        ],
+        "confidence": 0.2184365689754486,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000009": {
+    "frame_id": "demo_000009",
+    "timestamp_unix_us": 1785332709504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000009.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          179,
+          204,
+          142,
+          26
+        ],
+        "confidence": 0.7427791357040405,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          778,
+          544,
+          230,
+          117
+        ],
+        "confidence": 0.6773072481155396,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          25,
+          418,
+          303,
+          73
+        ],
+        "confidence": 0.6133161783218384,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          163,
+          303,
+          267,
+          51
+        ],
+        "confidence": 0.5462580323219299,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          500,
+          245,
+          127,
+          28
+        ],
+        "confidence": 0.3590972125530243,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          972,
+          317,
+          307,
+          148
+        ],
+        "confidence": 0.3088490664958954,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000010": {
+    "frame_id": "demo_000010",
+    "timestamp_unix_us": 1785332709904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000010.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          0,
+          511,
+          239,
+          101
+        ],
+        "confidence": 0.7428504228591919,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          70,
+          341,
+          330,
+          68
+        ],
+        "confidence": 0.6652958393096924,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          392,
+          199,
+          113,
+          25
+        ],
+        "confidence": 0.6172698736190796,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          127,
+          219,
+          156,
+          27
+        ],
+        "confidence": 0.58053058385849,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          487,
+          266,
+          160,
+          40
+        ],
+        "confidence": 0.378185898065567,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          793,
+          175,
+          177,
+          42
+        ],
+        "confidence": 0.3108147382736206,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000011": {
+    "frame_id": "demo_000011",
+    "timestamp_unix_us": 1785332710304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000011.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          80,
+          234,
+          183,
+          31
+        ],
+        "confidence": 0.7069893479347229,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          381,
+          209,
+          118,
+          27
+        ],
+        "confidence": 0.6604775786399841,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          7,
+          395,
+          375,
+          98
+        ],
+        "confidence": 0.6472387313842773,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          733,
+          343,
+          137,
+          35
+        ],
+        "confidence": 0.6249186992645264,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          482,
+          294,
+          184,
+          40
+        ],
+        "confidence": 0.6020618677139282,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          407,
+          429,
+          191,
+          91
+        ],
+        "confidence": 0.21787285804748535,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000012": {
+    "frame_id": "demo_000012",
+    "timestamp_unix_us": 1785332710704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000012.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          787,
+          396,
+          154,
+          46
+        ],
+        "confidence": 0.6941606998443604,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          470,
+          329,
+          226,
+          51
+        ],
+        "confidence": 0.6914303302764893,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          2,
+          474,
+          335,
+          154
+        ],
+        "confidence": 0.5988377928733826,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          365,
+          224,
+          140,
+          31
+        ],
+        "confidence": 0.5302026271820068,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          36,
+          251,
+          200,
+          38
+        ],
+        "confidence": 0.4401342272758484,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          833,
+          191,
+          216,
+          56
+        ],
+        "confidence": 0.33130139112472534,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          78,
+          301,
+          322,
+          61
+        ],
+        "confidence": 0.15157422423362732,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000013": {
+    "frame_id": "demo_000013",
+    "timestamp_unix_us": 1785332711104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000013.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          445,
+          192,
+          115,
+          30
+        ],
+        "confidence": 0.648736834526062,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          441,
+          384,
+          274,
+          70
+        ],
+        "confidence": 0.5268668532371521,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          273,
+          211,
+          48
+        ],
+        "confidence": 0.4690837860107422,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          835,
+          481,
+          195,
+          69
+        ],
+        "confidence": 0.23053961992263794,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          798,
+          297,
+          66,
+          20
+        ],
+        "confidence": 0.22689616680145264,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000014": {
+    "frame_id": "demo_000014",
+    "timestamp_unix_us": 1785332711504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000014.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          423,
+          202,
+          128,
+          36
+        ],
+        "confidence": 0.792884349822998,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          304,
+          98,
+          58
+        ],
+        "confidence": 0.7212363481521606,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          291,
+          261,
+          192,
+          46
+        ],
+        "confidence": 0.5758861303329468,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          881,
+          215,
+          258,
+          75
+        ],
+        "confidence": 0.4923650920391083,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000015": {
+    "frame_id": "demo_000015",
+    "timestamp_unix_us": 1785332711904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000015.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          405,
+          215,
+          140,
+          39
+        ],
+        "confidence": 0.6984714269638062,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          252,
+          286,
+          217,
+          60
+        ],
+        "confidence": 0.6003530621528625,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          909,
+          225,
+          306,
+          99
+        ],
+        "confidence": 0.5617497563362122,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          678,
+          321,
+          128,
+          32
+        ],
+        "confidence": 0.5028964281082153,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1116,
+          452,
+          162,
+          94
+        ],
+        "confidence": 0.266648530960083,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000016": {
+    "frame_id": "demo_000016",
+    "timestamp_unix_us": 1785332712304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000016.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          183,
+          324,
+          254,
+          81
+        ],
+        "confidence": 0.6674773097038269,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          325,
+          426,
+          159,
+          53
+        ],
+        "confidence": 0.6521996259689331,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          700,
+          369,
+          150,
+          43
+        ],
+        "confidence": 0.6411299109458923,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          399,
+          229,
+          142,
+          47
+        ],
+        "confidence": 0.5954914093017578,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          951,
+          241,
+          328,
+          125
+        ],
+        "confidence": 0.5112150311470032,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000017": {
+    "frame_id": "demo_000017",
+    "timestamp_unix_us": 1785332712704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000017.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          362,
+          247,
+          170,
+          44
+        ],
+        "confidence": 0.7677405476570129,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          726,
+          444,
+          196,
+          58
+        ],
+        "confidence": 0.6270639300346375,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          205,
+          113,
+          25
+        ],
+        "confidence": 0.3987797498703003,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          113,
+          372,
+          272,
+          124
+        ],
+        "confidence": 0.3315988779067993,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          614,
+          330,
+          104,
+          30
+        ],
+        "confidence": 0.2738769054412842,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000018": {
+    "frame_id": "demo_000018",
+    "timestamp_unix_us": 1785332713104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000018.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          617,
+          377,
+          130,
+          43
+        ],
+        "confidence": 0.7999423742294312,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          299,
+          271,
+          236,
+          54
+        ],
+        "confidence": 0.7373661994934082,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          465,
+          221,
+          181,
+          33
+        ],
+        "confidence": 0.5882488489151001,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          768,
+          556,
+          172,
+          97
+        ],
+        "confidence": 0.5091240406036377,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000019": {
+    "frame_id": "demo_000019",
+    "timestamp_unix_us": 1785332713504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000019.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          295,
+          303,
+          245,
+          66
+        ],
+        "confidence": 0.6980237364768982,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          633,
+          449,
+          166,
+          66
+        ],
+        "confidence": 0.6641680002212524,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          372,
+          192,
+          90,
+          21
+        ],
+        "confidence": 0.6455048322677612,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          454,
+          239,
+          192,
+          37
+        ],
+        "confidence": 0.5530055165290833,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000020": {
+    "frame_id": "demo_000020",
+    "timestamp_unix_us": 1785332713904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000020.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          353,
+          205,
+          102,
+          21
+        ],
+        "confidence": 0.7325202226638794,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          440,
+          264,
+          225,
+          43
+        ],
+        "confidence": 0.5638595819473267,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          224,
+          356,
+          315,
+          83
+        ],
+        "confidence": 0.18426677584648132,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000021": {
+    "frame_id": "demo_000021",
+    "timestamp_unix_us": 1785332714304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000021.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          336,
+          219,
+          110,
+          25
+        ],
+        "confidence": 0.7925293445587158,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          422,
+          290,
+          259,
+          59
+        ],
+        "confidence": 0.6811560392379761,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          160,
+          436,
+          380,
+          117
+        ],
+        "confidence": 0.6693999767303467,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          794,
+          176,
+          63,
+          14
+        ],
+        "confidence": 0.24281790852546692,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000022": {
+    "frame_id": "demo_000022",
+    "timestamp_unix_us": 1785332714704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000022.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          307,
+          237,
+          126,
+          29
+        ],
+        "confidence": 0.8037725687026978,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          408,
+          331,
+          294,
+          76
+        ],
+        "confidence": 0.693607747554779,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000023": {
+    "frame_id": "demo_000023",
+    "timestamp_unix_us": 1785332715104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000023.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          278,
+          255,
+          143,
+          37
+        ],
+        "confidence": 0.8000766038894653,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          371,
+          380,
+          367,
+          106
+        ],
+        "confidence": 0.686516523361206,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          776,
+          499,
+          133,
+          60
+        ],
+        "confidence": 0.34898751974105835,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          444,
+          158,
+          134,
+          32
+        ],
+        "confidence": 0.17422834038734436,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000024": {
+    "frame_id": "demo_000024",
+    "timestamp_unix_us": 1785332715504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000024.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          235,
+          279,
+          170,
+          41
+        ],
+        "confidence": 0.7517009973526001,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          334,
+          343,
+          238,
+          62
+        ],
+        "confidence": 0.6622763872146606,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          441,
+          163,
+          136,
+          34
+        ],
+        "confidence": 0.3773679733276367,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000025": {
+    "frame_id": "demo_000025",
+    "timestamp_unix_us": 1785332715904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000025.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          178,
+          309,
+          207,
+          59
+        ],
+        "confidence": 0.7759516835212708,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          293,
+          403,
+          282,
+          88
+        ],
+        "confidence": 0.7533015608787537,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          639,
+          390,
+          99,
+          31
+        ],
+        "confidence": 0.5946822166442871,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          428,
+          170,
+          153,
+          36
+        ],
+        "confidence": 0.36719411611557007,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          941,
+          266,
+          220,
+          60
+        ],
+        "confidence": 0.24948567152023315,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000026": {
+    "frame_id": "demo_000026",
+    "timestamp_unix_us": 1785332716304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000026.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          99,
+          358,
+          256,
+          78
+        ],
+        "confidence": 0.7608792781829834,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1016,
+          295,
+          258,
+          78
+        ],
+        "confidence": 0.5746493339538574,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          202,
+          512,
+          406,
+          138
+        ],
+        "confidence": 0.326831579208374,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          681,
+          476,
+          115,
+          43
+        ],
+        "confidence": 0.2984614968299866,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000027": {
+    "frame_id": "demo_000027",
+    "timestamp_unix_us": 1785332716704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000027.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          4,
+          416,
+          308,
+          124
+        ],
+        "confidence": 0.791374921798706,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          412,
+          183,
+          178,
+          46
+        ],
+        "confidence": 0.4582950472831726,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1092,
+          324,
+          187,
+          101
+        ],
+        "confidence": 0.4478001296520233,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000028": {
+    "frame_id": "demo_000028",
+    "timestamp_unix_us": 1785332717104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000028.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          0,
+          526,
+          232,
+          193
+        ],
+        "confidence": 0.6649069786071777,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          388,
+          193,
+          209,
+          53
+        ],
+        "confidence": 0.2798996865749359,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000029": {
+    "frame_id": "demo_000029",
+    "timestamp_unix_us": 1785332717504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000029.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          473,
+          205,
+          134,
+          32
+        ],
+        "confidence": 0.3560396432876587,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          781,
+          325,
+          89,
+          28
+        ],
+        "confidence": 0.2452283799648285,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000030": {
+    "frame_id": "demo_000030",
+    "timestamp_unix_us": 1785332717904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000030.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          471,
+          218,
+          146,
+          33
+        ],
+        "confidence": 0.7522153258323669,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          847,
+          376,
+          94,
+          34
+        ],
+        "confidence": 0.6120151877403259,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000031": {
+    "frame_id": "demo_000031",
+    "timestamp_unix_us": 1785332718304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000031.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          454,
+          235,
+          174,
+          36
+        ],
+        "confidence": 0.7609370350837708,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          917,
+          461,
+          168,
+          58
+        ],
+        "confidence": 0.6897751092910767,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000032": {
+    "frame_id": "demo_000032",
+    "timestamp_unix_us": 1785332718704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000032.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          331,
+          340,
+          199,
+          45
+        ],
+        "confidence": 0.6549601554870605,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          767,
+          339,
+          88,
+          29
+        ],
+        "confidence": 0.6297414898872375,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          455,
+          257,
+          201,
+          54
+        ],
+        "confidence": 0.596032977104187,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000033": {
+    "frame_id": "demo_000033",
+    "timestamp_unix_us": 1785332719104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000033.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          834,
+          410,
+          122,
+          40
+        ],
+        "confidence": 0.7429163455963135,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          275,
+          416,
+          197,
+          68
+        ],
+        "confidence": 0.6996108293533325,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000034": {
+    "frame_id": "demo_000034",
+    "timestamp_unix_us": 1785332719504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000034.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          947,
+          539,
+          167,
+          63
+        ],
+        "confidence": 0.6354309320449829,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          709,
+          301,
+          162,
+          35
+        ],
+        "confidence": 0.19864529371261597,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000035": {
+    "frame_id": "demo_000035",
+    "timestamp_unix_us": 1785332719904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000035.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          757,
+          351,
+          191,
+          46
+        ],
+        "confidence": 0.5462580323219299,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          388,
+          414,
+          589,
+          164
+        ],
+        "confidence": 0.5363292694091797,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000036": {
+    "frame_id": "demo_000036",
+    "timestamp_unix_us": 1785332720304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000036.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          814,
+          438,
+          268,
+          74
+        ],
+        "confidence": 0.38819578289985657,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          290,
+          568,
+          876,
+          151
+        ],
+        "confidence": 0.30488336086273193,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000037": {
+    "frame_id": "demo_000037",
+    "timestamp_unix_us": 1785332720704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000037.jpg",
+    "detections": []
+  },
+  "demo_000038": {
+    "frame_id": "demo_000038",
+    "timestamp_unix_us": 1785332721104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000038.jpg",
+    "detections": []
+  },
+  "demo_000039": {
+    "frame_id": "demo_000039",
+    "timestamp_unix_us": 1785332721504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000039.jpg",
+    "detections": []
+  },
+  "demo_000040": {
+    "frame_id": "demo_000040",
+    "timestamp_unix_us": 1785332721904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000040.jpg",
+    "detections": []
+  },
+  "demo_000041": {
+    "frame_id": "demo_000041",
+    "timestamp_unix_us": 1785332722303999,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000041.jpg",
+    "detections": []
+  },
+  "demo_000042": {
+    "frame_id": "demo_000042",
+    "timestamp_unix_us": 1785332722704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000042.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          173,
+          232,
+          205,
+          48
+        ],
+        "confidence": 0.27293717861175537,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000043": {
+    "frame_id": "demo_000043",
+    "timestamp_unix_us": 1785332723104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000043.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          738,
+          376,
+          74,
+          19
+        ],
+        "confidence": 0.33057910203933716,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000044": {
+    "frame_id": "demo_000044",
+    "timestamp_unix_us": 1785332723504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000044.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          353,
+          377,
+          182,
+          56
+        ],
+        "confidence": 0.6877824664115906,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          789,
+          456,
+          93,
+          30
+        ],
+        "confidence": 0.45983999967575073,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          352,
+          244,
+          133,
+          23
+        ],
+        "confidence": 0.1725611388683319,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          78,
+          286,
+          231,
+          58
+        ],
+        "confidence": 0.16397902369499207,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000045": {
+    "frame_id": "demo_000045",
+    "timestamp_unix_us": 1785332723904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000045.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          0,
+          186,
+          149,
+          37
+        ],
+        "confidence": 0.4209951162338257,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          313,
+          274,
+          180,
+          31
+        ],
+        "confidence": 0.3419336676597595,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          568,
+          165,
+          81,
+          17
+        ],
+        "confidence": 0.23548713326454163,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          784,
+          491,
+          200,
+          68
+        ],
+        "confidence": 0.1586940586566925,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000046": {
+    "frame_id": "demo_000046",
+    "timestamp_unix_us": 1785332724304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000046.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          269,
+          322,
+          211,
+          42
+        ],
+        "confidence": 0.34823834896087646,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          198,
+          105,
+          43
+        ],
+        "confidence": 0.3311365842819214,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          10,
+          289,
+          134,
+          45
+        ],
+        "confidence": 0.24585050344467163,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          565,
+          177,
+          98,
+          19
+        ],
+        "confidence": 0.24520617723464966,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000047": {
+    "frame_id": "demo_000047",
+    "timestamp_unix_us": 1785332724704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000047.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          166,
+          375,
+          291,
+          62
+        ],
+        "confidence": 0.5023329854011536,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          328,
+          68,
+          66
+        ],
+        "confidence": 0.2986874580383301,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          552,
+          186,
+          123,
+          22
+        ],
+        "confidence": 0.27686816453933716,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          206,
+          76,
+          47
+        ],
+        "confidence": 0.22966444492340088,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000048": {
+    "frame_id": "demo_000048",
+    "timestamp_unix_us": 1785332725104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000048.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          52,
+          447,
+          360,
+          96
+        ],
+        "confidence": 0.4181121587753296,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          237,
+          359,
+          143,
+          65
+        ],
+        "confidence": 0.3570576608181,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000049": {
+    "frame_id": "demo_000049",
+    "timestamp_unix_us": 1785332725504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000049.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          576,
+          210,
+          113,
+          30
+        ],
+        "confidence": 0.3051578998565674,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          11,
+          595,
+          373,
+          124
+        ],
+        "confidence": 0.15666326880455017,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000050": {
+    "frame_id": "demo_000050",
+    "timestamp_unix_us": 1785332725904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000050.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          349,
+          362,
+          258,
+          72
+        ],
+        "confidence": 0.5017131567001343,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000051": {
+    "frame_id": "demo_000051",
+    "timestamp_unix_us": 1785332726304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000051.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          250,
+          352,
+          121,
+          35
+        ],
+        "confidence": 0.44034117460250854,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          251,
+          437,
+          373,
+          110
+        ],
+        "confidence": 0.17833390831947327,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000052": {
+    "frame_id": "demo_000052",
+    "timestamp_unix_us": 1785332726704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000052.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          160,
+          422,
+          172,
+          59
+        ],
+        "confidence": 0.4488987922668457,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000053": {
+    "frame_id": "demo_000053",
+    "timestamp_unix_us": 1785332727104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000053.jpg",
+    "detections": []
+  },
+  "demo_000054": {
+    "frame_id": "demo_000054",
+    "timestamp_unix_us": 1785332727504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000054.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          564,
+          150,
+          56,
+          21
+        ],
+        "confidence": 0.34281665086746216,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          373,
+          176,
+          113,
+          22
+        ],
+        "confidence": 0.22327551245689392,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000055": {
+    "frame_id": "demo_000055",
+    "timestamp_unix_us": 1785332727904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000055.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          356,
+          183,
+          131,
+          29
+        ],
+        "confidence": 0.3187990188598633,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000056": {
+    "frame_id": "demo_000056",
+    "timestamp_unix_us": 1785332728304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000056.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          339,
+          199,
+          150,
+          27
+        ],
+        "confidence": 0.5003780126571655,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          537,
+          142,
+          69,
+          19
+        ],
+        "confidence": 0.49546119570732117,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          402,
+          297,
+          87,
+          26
+        ],
+        "confidence": 0.2759806513786316,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000057": {
+    "frame_id": "demo_000057",
+    "timestamp_unix_us": 1785332728704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000057.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          364,
+          351,
+          112,
+          29
+        ],
+        "confidence": 0.42459508776664734,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          313,
+          212,
+          169,
+          34
+        ],
+        "confidence": 0.31454241275787354,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          540,
+          148,
+          70,
+          17
+        ],
+        "confidence": 0.2922710180282593,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000058": {
+    "frame_id": "demo_000058",
+    "timestamp_unix_us": 1785332729104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000058.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          283,
+          231,
+          195,
+          45
+        ],
+        "confidence": 0.5327855944633484,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          545,
+          153,
+          74,
+          23
+        ],
+        "confidence": 0.3594837486743927,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000059": {
+    "frame_id": "demo_000059",
+    "timestamp_unix_us": 1785332729504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000059.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          548,
+          161,
+          85,
+          23
+        ],
+        "confidence": 0.6478341817855835,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          701,
+          261,
+          103,
+          30
+        ],
+        "confidence": 0.6061900854110718,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          263,
+          261,
+          208,
+          54
+        ],
+        "confidence": 0.43412625789642334,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          291,
+          124,
+          86
+        ],
+        "confidence": 0.31354278326034546,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000060": {
+    "frame_id": "demo_000060",
+    "timestamp_unix_us": 1785332729904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000060.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          219,
+          302,
+          243,
+          75
+        ],
+        "confidence": 0.6224133372306824,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          550,
+          170,
+          93,
+          24
+        ],
+        "confidence": 0.613011360168457,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          708,
+          297,
+          156,
+          39
+        ],
+        "confidence": 0.5588967204093933,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          0,
+          275,
+          169,
+          115
+        ],
+        "confidence": 0.1775032877922058,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000061": {
+    "frame_id": "demo_000061",
+    "timestamp_unix_us": 1785332730304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000061.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          142,
+          356,
+          302,
+          80
+        ],
+        "confidence": 0.5964309573173523,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000062": {
+    "frame_id": "demo_000062",
+    "timestamp_unix_us": 1785332730704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000062.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          836,
+          423,
+          240,
+          99
+        ],
+        "confidence": 0.4730990529060364,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          566,
+          195,
+          96,
+          35
+        ],
+        "confidence": 0.3597874641418457,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000063": {
+    "frame_id": "demo_000063",
+    "timestamp_unix_us": 1785332731104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000063.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          660,
+          283,
+          157,
+          42
+        ],
+        "confidence": 0.6657012104988098,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          784,
+          190,
+          61,
+          18
+        ],
+        "confidence": 0.31524115800857544,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000064": {
+    "frame_id": "demo_000064",
+    "timestamp_unix_us": 1785332731504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000064.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          816,
+          206,
+          65,
+          20
+        ],
+        "confidence": 0.41830798983573914,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          581,
+          260,
+          109,
+          27
+        ],
+        "confidence": 0.4025520086288452,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000065": {
+    "frame_id": "demo_000065",
+    "timestamp_unix_us": 1785332731904000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000065.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          593,
+          300,
+          127,
+          31
+        ],
+        "confidence": 0.297282338142395,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000066": {
+    "frame_id": "demo_000066",
+    "timestamp_unix_us": 1785332732304000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000066.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          602,
+          357,
+          179,
+          56
+        ],
+        "confidence": 0.7216730713844299,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          826,
+          162,
+          62,
+          13
+        ],
+        "confidence": 0.17441818118095398,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000067": {
+    "frame_id": "demo_000067",
+    "timestamp_unix_us": 1785332732704000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000067.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          630,
+          458,
+          215,
+          89
+        ],
+        "confidence": 0.4356241524219513,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      },
+      {
+        "bbox_xywh": [
+          1,
+          239,
+          120,
+          49
+        ],
+        "confidence": 0.4086686968803406,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  },
+  "demo_000068": {
+    "frame_id": "demo_000068",
+    "timestamp_unix_us": 1785332733104000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000068.jpg",
+    "detections": []
+  },
+  "demo_000069": {
+    "frame_id": "demo_000069",
+    "timestamp_unix_us": 1785332733504000,
+    "image_width": 1280,
+    "image_height": 720,
+    "source_path": "/home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/frames/demo_000069.jpg",
+    "detections": [
+      {
+        "bbox_xywh": [
+          697,
+          228,
+          126,
+          30
+        ],
+        "confidence": 0.1545737385749817,
+        "class_id": 0,
+        "severity": "level_1",
+        "estimated_depth_cm": null,
+        "estimated_area_sqcm": null,
+        "ignore": false
+      }
+    ]
+  }
+}
