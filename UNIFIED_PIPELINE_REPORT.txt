@@ -1,0 +1,159 @@
+UNIFIED CDAC POTHOLE MANAGEMENT PIPELINE - IN-DEPTH TECHNICAL REPORT
+=====================================================================
+
+Architecture Overview
+---------------------
+Single FastAPI application (`inference/app.py`) serving a unified browser
+dashboard at http://localhost:8000. One command (`python app.py`) starts
+everything: live INT8 inference, annotation workspace, retraining triggers,
+and pipeline timeline. The app also mounts the annotator sub-app
+(`inference/annotate/annotation_app.py`) at /annotate for frame-level
+review and labeling.
+
+Pipeline Tabs (shell.html)
+--------------------------
+1. Dashboard  - Live INT8 inference feed + GIS map + saved events
+2. Annotate   - Frame-by-frame annotation review (iframe to /annotate)
+3. Train      - Retrain YOLO + build INT8 TensorRT engine
+4. Timeline   - Pipeline stage status (inference / annotate / train / deploy)
+
+Component Layout
+----------------
+inference/
+  app.py              - Unified FastAPI app (port 8000)
+  shell.html          - Browser dashboard UI
+  best_int8.engine    - Deployed INT8 TensorRT engine (13 MB)
+  best.pt             - YOLO model weights
+  best.onnx           - ONNX intermediate
+  potholes.db         - SQLite database of detected pothole events
+  uploads/            - Annotated snapshot images served at /uploads
+  annotations/        - Annotation workspace (manifest, predictions, frames, labels)
+  annotate/
+    annotation_app.py - FastAPI sub-app for annotation (port 8765 standalone)
+    annotate.html     - Canvas-based annotation UI
+    classes.py        - CLASS_NAMES, CLASS_IDS, SEVERITY_LEVELS
+    schema.py         - Detection, FrameRecord, YOLO/COCO serialization
+    preannotate.py    - Batch pre-annotation over images/video
+    train_pipeline.py - Retraining + INT8 engine build
+
+Data Flow - Live Inference (Dashboard Tab)
+------------------------------------------
+1. App startup: `get_inference()` lazily creates `InferenceLoop`, which
+   instantiates `TRTInference` (loads best_int8.engine via TensorRT
+   Runtime, allocates device input/output buffers, creates CUDA stream
+   and execution context) and opens cv2.VideoCapture on demo.mp4.
+
+2. Each HTTP request to /video-feed calls `read_frame()`:
+   a. Read next frame from video (loops to start when EOF; stops after
+      one full play unless /api/feed/start is called again).
+   b. Preprocess: BGR->RGB, resize to 640x640, normalize to [0,1],
+      HWC->CHW, add batch dimension, contiguous float32 array.
+   c. CUDA: memcpy_htod_async to device input buffer, execute_async_v3
+      on TensorRT execution context, memcpy_dtoh_async to host output,
+      stream.synchronize().
+   d. Postprocess: transpose output to (8400, 5), filter by confidence
+      (default 0.15), decode cx/cy/w/h to x1/y1/x2/y2 scaled back to
+      original frame resolution, apply cv2.dnn.NMSBoxes (NMS 0.30).
+   e. BoxTracker: IoU-matched temporal smoothing - new detections are
+      matched to existing live boxes by IoU (threshold 0.30). Matched
+      boxes are refreshed in-place at the new position with TTL reset
+      to 8 frames. Unmatched detections become new boxes. Expired boxes
+      (TTL reaches 0) are dropped. This eliminates flicker (boxes
+      persist when confidence hovers near threshold) and eliminates
+      trails/duplicates (boxes updated in-place, not stacked).
+   f. Draw green rectangles + confidence labels on frame.
+   g. Encode frame to JPEG (quality 80).
+   h. Save pothole events to SQLite (~1 rate-limited per second): each
+      detection writes a row with label, confidence, lat/lng (0.0), UTC
+      timestamp, and image_path pointing to an annotated snapshot saved
+      under /uploads/pothole_*.jpg.
+   i. Return multipart/x-mixed-replace JPEG stream to browser.
+
+3. Browser renders <img src="/video-feed">. Stats endpoint
+   /video-feed-stats returns fps, detections, frames, last_frame_ms,
+   active_boxes, status - polled every 4s by the dashboard.
+
+CUDA Context Handling
+---------------------
+pycuda contexts are thread-local. FastAPI routes run in uvicorn's
+threadpool, not the main thread where pycuda.autoinit created the
+primary context. `TRTInference.__init__` calls
+`cuda.Device(0).make_context()` in the request thread, then pushes/pops
+that context around every `infer_detections()` call so device memory
+allocations and kernel launches execute on the correct active context.
+This resolves the original "invalid device context" error that occurred
+when engine loading/inference ran in background threads.
+
+Data Flow - Annotation (Annotate Tab)
+-------------------------------------
+1. Pre-annotation (offline): `python -m annotate.preannotate --source
+   demo.mp4 --out annotations --every 10` extracts frames from video,
+   runs YOLO (best.pt) over each frame, writes YOLO labels to
+   annotations/labels/, manifest.json with frame metadata, and
+   predictions.json with full detection records (class, confidence,
+   severity, depth, area, ignore flag).
+
+2. Browser opens /annotate (iframe to annotation_app.py). The annotator
+   loads manifest.json, displays frames in a canvas, and lets the user
+   draw/move/resize boxes, set class/severity/confidence/depth/area,
+   toggle ignore flag, add telemetry (GPS, altitude, speed, etc.) and
+   environment (lux, surface, weather) metadata.
+
+3. Edits auto-save on Prev/Next navigation (no manual Save required).
+   Changes POST to /api/frames/{frame_id} which updates
+   predictions.json and writes YOLO labels to labels/.
+
+4. Export: /api/export writes YOLO labels, ignore labels, per-frame
+   JSON payloads, COCO annotations, rendered annotated images, and sets
+   .export_done flag to signal the training pipeline may proceed.
+
+Data Flow - Training (Train Tab)
+--------------------------------
+1. Click Start Training -> POST /api/train launches
+   `python -m annotate.train_pipeline --annotations annotations
+   --model best.pt --tensorrt --int8 --calib-set calib_images
+   --device cuda:0` as a subprocess.
+2. Training fine-tunes YOLO on exported annotations, then builds a new
+   INT8 TensorRT engine with INT8EntropyCalibrator2 calibration.
+3. Poll /api/train/status for progress; on completion the new engine
+   replaces best_int8.engine and the dashboard picks it up on restart.
+
+Data Flow - Events / Map (Dashboard Tab)
+----------------------------------------
+1. Inference writes pothole rows to potholes.db SQLite database.
+2. /potholes endpoint returns all events ordered by timestamp desc.
+3. Browser renders a table (Time, Confidence, GPS, Image link) and a
+   Leaflet.js map with markers for GPS-tagged events.
+4. "Clear All" button calls DELETE /api/potholes/clear to wipe the table.
+5. Each event's image_path points to /uploads/pothole_*.jpg - an
+   annotated snapshot captured at detection time, so events are
+   visually verifiable in the browser.
+
+Stop/Start Feed
+---------------
+- /api/feed/stop sets InferenceLoop._stop = True; the video-feed
+  generator loop exits, inference pauses.
+- /api/feed/start resets _stop = False, rewinds video to frame 0, and
+  the feed resumes from the beginning.
+- Browser has Start/Restart and Stop buttons wired to these endpoints.
+
+Performance Characteristics (verified on demo.mp4, 692 frames)
+---------------------------------------------------------------
+Pure INT8 inference (no UI):       ~102 FPS,  9.8 ms/frame
+With cv2.imshow display:           ~30-50 FPS, 19.2 ms/frame
+Whole FastAPI pipeline (port 8000): ~13 FPS,  ~24 ms/frame
+
+Model speed is not the bottleneck; UI, JPEG encoding, HTTP streaming,
+SQLite writes, and OpenCV preprocessing dominate the end-to-end pipeline.
+
+Key Files
+---------
+inference/app.py:101   - TRTInference.infer_detections (CUDA push/pop)
+inference/app.py:144   - BoxTracker (IoU-matched temporal smoothing)
+inference/app.py:236   - InferenceLoop.read_frame (per-frame pipeline)
+inference/app.py:302   - save_pothole (SQLite event logging)
+inference/app.py:354   - /api/feed/stop and /api/feed/start endpoints
+inference/app.py:377   - /api/potholes/clear endpoint
+inference/shell.html   - Dashboard UI with tabs, feed, map, events
+inference/annotate/annotate.html - Canvas annotation UI with auto-save
+inference/annotate/annotation_app.py - Annotation FastAPI sub-app
