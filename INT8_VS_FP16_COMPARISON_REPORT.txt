@@ -125,14 +125,14 @@ Confidence: 0.15   NMS: 0.30   Input: 640x640
 
 Metric               Value
 ------               -----
-Infer FPS            116.3
-Avg inference ms     8.6 ms / frame
-Wall FPS             54.4
-Wall time            12.7 s
+Infer FPS            102.0
+Avg inference ms     9.8 ms / frame
+Wall FPS             50.6
+Wall time            13.7 s
 Total detections     2055 (2.97/frame)
 
 Pure TensorRT execution (no cv2.imshow, no video streaming) runs at
-116.3 FPS, exceeding the 80 FPS target. Wall FPS is lower because
+~100-116 FPS, exceeding the 80 FPS target. Wall FPS is lower because
 OpenCV CPU overhead (VideoCapture.read, RGB conversion, resize, NMS)
 dominates end-to-end time at this resolution. The INT8 model itself is
 not the bottleneck.
