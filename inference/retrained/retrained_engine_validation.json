@@ -1,0 +1,26 @@
+{
+  "model": "inference/retrained/best_retrained.pt",
+  "engine": "inference/retrained/best_retrained_int8.engine",
+  "frames_tested": 50,
+  "image_size": 640,
+  "device": "cuda:0",
+  "pytorch": {
+    "avg_inf_ms": 38.999,
+    "std_ms": 6.204,
+    "min_ms": 29.781,
+    "max_ms": 50.237,
+    "p50_ms": 38.943,
+    "p95_ms": 49.105,
+    "fps": 25.64,
+    "detections_avg": 7.88
+  },
+  "tensorrt": {
+    "avg_inf_ms": 9.162,
+    "fps": 109.15
+  },
+  "accuracy": {
+    "note": "Detection comparison requires tensorrt python bindings on the Jetson.",
+    "pytorch_detections_avg": 7.88
+  },
+  "temperature_c": 51.937
+}

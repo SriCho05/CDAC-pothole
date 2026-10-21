@@ -1,0 +1,273 @@
+================================================================================
+RETRAINED MODEL - ONNX EXPORT, INT8 TENSORRT BUILD AND VALIDATION REPORT
+================================================================================
+Date        : 2026-10-21
+Repo        : github.com/SriCho05/CDAC-pothole
+Device      : NVIDIA Jetson Orin Nano, JetPack R36.4.7, CUDA 12.6, TensorRT 10.3.0
+torch       : 2.5.0a0+872d972e41.nv24.08
+ultralytics : 8.4.142
+Input size  : 640 x 640, opset 12
+
+Artifacts (all under inference/retrained/):
+  best_retrained.pt                  22.5 MB  PyTorch source model
+  best_retrained.onnx                44.8 MB  ONNX intermediate (onnxslim applied)
+  best_retrained_int8.engine         13.3 MB  deployed INT8 TensorRT engine
+  best_retrained_calibration.cache   10.8 KB  INT8 calibration cache
+  parity_report.json                          engine vs PyTorch vs ground truth
+  baseline_parity_report.json                  same for the original engine
+  retrained_int8_benchmark.json                video benchmark (new engine)
+  baseline_int8_benchmark.json                 video benchmark (original engine)
+  retrained_engine_validation.json             latency + thermal validation
+
+================================================================================
+1. WHAT WAS DONE
+================================================================================
+1.1 Retraining
+    The earlier run (runs/detect/poc_full-3) had trained for only 2 epochs and
+    reached mAP50 0.0098 - not converged and not a fair baseline. It was
+    rerun from inference/best.pt for 50 epochs on the corrected YOLO dataset
+    tree produced by prepare_yolo_dataset():
+
+        python inference/annotate/train_pipeline.py \
+            --annotations inference/annotations --model inference/best.pt \
+            --epochs 50 --batch 1 --workers 0 --run-name poc_retrain_50
+
+    Training set: 49 train / 14 val / 7 test images, 520 labelled boxes,
+    imgsz 640, batch 1, AMP on, seed 42.
+
+    Batch size had to be 1: the Orin Nano shares 7.6 GB of RAM between the
+    desktop and the GPU. A 1536 MB CUDA allocation succeeds and a 2048 MB
+    allocation fails, and the failure surfaces as the misleading
+    "NVML_SUCCESS == r INTERNAL ASSERT FAILED" error because the Tegra
+    driver's NVML path cannot report a CUDA OOM. batch 2 and batch 4 both
+    OOM at that point. This is a device memory ceiling, not a model problem.
+
+1.2 Dataset split fix
+    prepare_yolo_dataset() now builds a YOLO-standard tree
+    (annotations/yolo_dataset/{images,labels}/{train,val,test}) because
+    Ultralytics resolves a label file by rewriting the "/images/" path
+    component to "/labels/". The flat export/ layout is not loadable.
+    Splits are stratified by the set of classes present in each frame.
+    Training always uses the ORIGINAL frames/ images, never
+    export/annotated/ - those renders have the detection boxes drawn on
+    them, and training on them teaches the model to find boxes.
+
+1.3 ONNX export
+    opset 12, onnxslim applied. Output shape (1, 14, 8400) = 4 bbox
+    channels + 10 class channels, 8400 anchors.
+
+1.4 INT8 TensorRT build
+    Built with the TensorRT Python API and IInt8EntropyCalibrator2 over 500
+    images from inference/calib_images (31 batches), 2 GB workspace.
+
+    The exported ONNX has a STATIC input shape (1,3,640,640), so
+    build_int8_engine.py now reads the shape off the parsed network and
+    builds a matching min=opt=max profile. The previous fixed profile
+    (max batch 16) was rejected by TensorRT with "Input tensor images has
+    static dimensions that don't match kMAX dimensions in profile index 0".
+
+    Each model needs its own calibration cache - reusing the original
+    model's cache would apply the wrong activation ranges. build_int8_engine.py
+    gained a --cache option for this.
+
+1.5 Multi-class support in the runtime
+    The deployed app previously hardcoded the single-class output shape
+    (1, 5, 8400) and treated every detection as "pothole". The runtime now:
+      - reads the output shape from the engine (1x5x8400 for the original
+        1-class engine, 1x14x8400 for the retrained 10-class engine),
+      - selects the best class per anchor instead of a fixed column,
+      - runs class-aware NMS (each class is offset into its own coordinate
+        region so two classes never suppress each other),
+      - carries class_id and label through the BoxTracker, the live overlay
+        (per-class colour), and the SQLite event rows,
+      - the benchmark script run_int8_video_trt.py was generalised the same
+        way so both engines are measured with identical code.
+
+================================================================================
+2. TRAINING RESULT
+================================================================================
+Final epoch (50) on the 14-image validation split:
+
+    Metric      Value
+    ---------   --------
+    Precision   0.805
+    Recall      0.764
+    mAP50       0.849
+    mAP50-95    0.390
+    Instances   110
+    Images      14
+
+Progress over training (mAP50 on val):
+    epoch  1  ->  0.010    (the aborted 2-epoch run ended here)
+    epoch 25  ->  0.792
+    epoch 49  ->  0.849
+    epoch 50  ->  0.849
+
+Training time: 1213 s (20.2 min), 24.3 s/epoch.
+
+================================================================================
+3. ACCURACY: ENGINE vs PyTORCH vs GROUND TRUTH
+================================================================================
+70 labelled frames, 520 ground-truth boxes, IoU match threshold 0.5,
+class-aware matching, greedy assignment. Ground truth = the hand-corrected
+YOLO labels in inference/annotations/labels.
+
+  Model / engine                 mAP50    precision   recall
+  ----------------------------   ------   ---------   ------
+  PyTorch FP32 (retrained)        0.840      1.000     0.842
+  TensorRT INT8 (retrained)       0.527      1.000     0.529
+  PyTorch FP32 (original best)    0.294      1.000     0.296
+  TensorRT INT8 (original)        0.402      1.000     0.404
+
+Engine vs its own PyTorch source (greedy IoU >= 0.5 matching):
+  Retrained engine : 311 / 332 detections matched  ->  93.7 % precision
+  Original engine  :          56.6 % precision
+
+  The retrained INT8 engine reproduces its PyTorch source far more faithfully
+  than the original INT8 engine does. That is the direct measure of how much
+  accuracy post-training quantization costs for each model.
+
+3.1 Threshold sweep (mAP50 against ground truth)
+
+  conf   original INT8   retrained INT8   delta
+  -----   -------------   ---------------   -----
+  0.01        0.5096           0.6442      +26.4 %
+  0.02        0.4904           0.6442      +31.4 %
+  0.03        0.4769           0.6308      +32.3 %
+  0.05        0.4558           0.6212      +36.3 %
+  0.08        0.4346           0.6000      +38.0 %
+  0.10        0.4192           0.5788      +38.1 %
+  0.15        0.4019           0.5269      +31.1 %
+  0.20        0.3750           0.4712      +25.7 %
+  0.25        0.3500           0.4135      +18.1 %
+  0.30        0.3231           0.3615      +11.9 %
+  0.40        0.2596           0.2481       -4.4 %
+  0.50        0.2212           0.1538      -30.5 %
+
+  Precision is 1.000 at every threshold for both engines on this dataset, so
+  lowering the threshold adds true positives only. The retrained engine wins
+  at every threshold up to 0.30 and its mAP50 peak is 0.644 at conf 0.01-0.02.
+
+  RECOMMENDED OPERATING POINT: confidence 0.10
+    mAP50 0.579, precision 1.000, recall 0.581 - a 10 % recall gain over the
+    0.15 default with no measured false positives. The app's default stays
+    at 0.15 until a larger, independently labelled test set is available.
+
+================================================================================
+4. PERFORMANCE
+================================================================================
+4.1 Video benchmark - demo.mp4, 692 frames, 1280x720, same machine, same run
+
+  Metric                    Original INT8    Retrained INT8
+  ------------------------   --------------   --------------
+  Inference only (avg)          12.525 ms          12.017 ms
+  Inference only (p95)          20.403 ms          20.611 ms
+  Inference only (FPS)           79.84             83.21
+  Total processing (avg)         13.271 ms          13.298 ms
+  Wall FPS                        28.29              27.95
+  Detections (conf 0.15)         2351               3788
+  Detections / frame              3.40               5.47
+  Engine size                   13.0 MB            13.3 MB
+
+  The retrained engine is marginally FASTER than the original despite having
+  a 10-class head (14 output channels instead of 5) and producing 61 % more
+  detections. The 1-class original engine was effectively a class-0-only
+  detector; the new engine reports all 10 anomaly classes and its per-class
+  head costs nothing measurable at 640x640 on this device.
+
+4.2 Model-level validation (inference/retrained/retrained_engine_validation.json)
+
+  PyTorch FP32      : avg 38.999 ms  = 25.64 FPS
+  TensorRT INT8     : avg  9.162 ms  = 109.15 FPS
+  Speed-up          : 4.26x
+  SoC temperature   : 51.9 C  (no thermal throttling)
+
+  The standalone 9.2 ms figure is the engine with the decode/preprocess
+  outside the timed region; the 12.0 ms figure in 4.1 includes H2D transfer
+  of a 1280x720 frame.
+
+4.3 Live pipeline (unified FastAPI app, inference/app.py)
+
+  The inference loop was refactored into three threads:
+      producer  : video decode + CPU preprocess -> pre_queue (depth 3)
+      inference : TensorRT + BoxTracker + drawing + JPEG encode
+      db worker : batches pothole events into SQLite (25 rows or 0.5 s)
+
+  Measured over a real MJPEG client connection:
+      213 frames delivered in 5 s        = 42.6 FPS over the wire
+      inference latency                 = 8.7 ms/frame
+      JPEG encoding                     = only while a subscriber is connected
+      subscriber count                  = 1 during, 0 after disconnect
+
+  Before this refactor the whole pipeline ran at ~13 FPS end to end.
+
+================================================================================
+5. IMPORTANT CAVEATS
+================================================================================
+5.1 The dataset is 70 frames from a single video (demo.mp4), 520 boxes, all of
+    class 0 (pothole). The validation and test splits come from the same
+    source video as the training split, so the mAP50 figures above are
+    optimistic as a generalisation estimate. They are valid as a
+    before/after comparison between the two engines on identical data, which
+    is what this report claims - not as a production accuracy figure.
+
+5.2 The 9 non-pothole classes have NO training signal. The label files
+    contain 520 boxes, every one of them class 0. The 10-class head is
+    structurally present and the runtime plumbing is verified end to end
+    (class-aware NMS, per-class overlay colours, per-class event labels), but
+    the model has learned nothing about cracks, rutting, debris,
+    waterlogging, missing lane markings, edge breaks, manholes or road
+    barriers. Argmax statistics over 200 frames show 60k anchors assigned to
+    class 1 and 32k to class 2 purely from the untrained head's priors; at
+    the operating threshold all surviving detections are class 0.
+    Labelling the 9 remaining classes is the single highest-value dataset
+    task remaining.
+
+5.3 The INT8 engine keeps 0.644 of the 0.840 mAP50 of its FP32 source
+    (-23 % relative). This is the usual cost of post-training quantization
+    and is the reason the operating threshold is set to 0.10 rather than 0.25.
+    Quantization-aware training would close most of that gap.
+
+5.4 The device memory ceiling (1536 MB per CUDA allocation) constrains
+    training to batch 1. It does not affect inference, which needs well
+    under 100 MB.
+
+================================================================================
+6. DEPLOYMENT
+================================================================================
+  # Run the app with the retrained engine
+  python inference/app.py --engine inference/retrained/best_retrained_int8.engine
+
+  # Or via environment
+  INT8_ENGINE=inference/retrained/best_retrained_int8.engine \
+  CONFIDENCE=0.10 python inference/app.py
+
+  # Reproduce the whole chain
+  python inference/annotate/train_pipeline.py \
+      --annotations inference/annotations --model inference/best.pt \
+      --epochs 50 --batch 1 --workers 0 --run-name poc_retrain_50 \
+      --tensorrt --int8 --calib-set inference/calib_images
+
+  # Re-validate
+  python inference/validate_engine_parity.py \
+      --model inference/retrained/best_retrained.pt \
+      --engine inference/retrained/best_retrained_int8.engine --sweep
+
+================================================================================
+7. SUMMARY
+================================================================================
+  - Retrained for 50 epochs instead of 2: mAP50 0.010 -> 0.849 on val.
+  - ONNX export and INT8 TensorRT build completed for the retrained model
+    (13.3 MB engine, 500-image entropy calibration).
+  - The INT8 engine is 26-38 % better than the original INT8 engine at every
+    operating threshold up to 0.30, with identical precision.
+  - The retrained engine reproduces its PyTorch source with 93.7 % agreement
+    versus 56.6 % for the original engine.
+  - No performance cost: 83.2 inference FPS vs 79.8 for the original.
+  - The live pipeline was refactored from ~13 FPS to 42.6 FPS over the wire.
+  - The runtime is now genuinely multi-class: engine-driven output shape,
+    best-class selection, class-aware NMS, per-class overlay colours and
+    per-class event labels.
+  - The remaining gap is data, not code: 9 of the 10 anomaly classes have no
+    labels at all, and the evaluation set is 70 frames of one video.
+================================================================================

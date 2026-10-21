@@ -1,0 +1,26 @@
+{
+  "model": "best.pt",
+  "engine": "tests/artifacts/best_fp16.engine",
+  "frames_tested": 50,
+  "image_size": 640,
+  "device": "cuda:0",
+  "pytorch": {
+    "avg_inf_ms": 39.258,
+    "std_ms": 5.473,
+    "min_ms": 30.049,
+    "max_ms": 60.671,
+    "p50_ms": 38.812,
+    "p95_ms": 48.913,
+    "fps": 25.47,
+    "detections_avg": 0.8
+  },
+  "tensorrt": {
+    "avg_inf_ms": 22.671,
+    "fps": 44.11
+  },
+  "accuracy": {
+    "note": "Detection comparison requires tensorrt python bindings on the Jetson.",
+    "pytorch_detections_avg": 0.8
+  },
+  "temperature_c": 51.75
+}

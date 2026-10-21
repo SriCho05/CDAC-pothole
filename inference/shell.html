@@ -184,7 +184,7 @@ const feed = $('feed');
 let feedSrc = '';
 async function startFeed() {
   try { await fetch('/api/feed/start', { method: 'POST' }); } catch (e) {}
-  feed.src = '/video-feed';
+  feed.src = '/video-feed?t=' + Date.now();
   $('btnStart').textContent = 'Restart Feed';
   $('feedStatus').textContent = 'Live';
 }

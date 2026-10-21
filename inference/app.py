@@ -17,9 +17,12 @@ Uses the latest INT8 engine (inference/best_int8.engine) for live inference.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import atexit
 import json
 import logging
 import os
+import queue
 import sqlite3
 import subprocess
 import sys
@@ -57,11 +60,28 @@ try:  # packaged import
     from annotate.annotation_app import Workspace, get_workspace  # type: ignore
     from annotate.classes import CLASS_NAMES, SEVERITY_LEVELS  # type: ignore
     from annotate.schema import Detection  # type: ignore
+    from annotate.env_setup import cuda_lib_env  # type: ignore
 except Exception:  # running directly from inference/
     sys.path.insert(0, str(INFERENCE_DIR))
     from annotate.annotation_app import Workspace, get_workspace  # type: ignore
     from annotate.classes import CLASS_NAMES, SEVERITY_LEVELS  # type: ignore
     from annotate.schema import Detection  # type: ignore
+    from annotate.env_setup import cuda_lib_env  # type: ignore
+
+
+#: BGR colour per anomaly class, used for the live overlay.
+CLASS_COLORS: dict[int, tuple[int, int, int]] = {
+    0: (0, 255, 0),      # pothole
+    1: (0, 200, 255),    # crack_transverse
+    2: (255, 200, 0),    # crack_longitudinal
+    3: (0, 165, 255),    # rutting
+    4: (200, 200, 200),  # debris
+    5: (255, 0, 255),    # waterlogging
+    6: (255, 255, 0),    # missing_lane_marking
+    7: (0, 255, 255),    # edge_break
+    8: (128, 0, 255),    # manhole
+    9: (255, 128, 0),    # road_barrier
+}
 
 
 class DetectionsBody(BaseModel):
@@ -79,9 +99,21 @@ class MetaBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 class TRTInference:
+    """INT8 TensorRT engine wrapper.
+
+    Uses page-locked (pinned) host buffers for roughly 2x faster H2D/D2H
+    transfers, and exposes ``close()`` so device memory is released on
+    shutdown - without that, a restart hits CUDA out-of-memory.
+
+    The output tensor shape is read from the engine, so both the original
+    single-class engine (1x5x8400) and the retrained 10-class engine
+    (1x14x8400) are supported by the same code path.
+    """
+
     def __init__(self, engine_path: Path):
         logger = trt.Logger(trt.Logger.WARNING)
         self.device_ctx = cuda.Device(0).make_context()
+        self._closed = False
         try:
             with open(engine_path, "rb") as f:
                 runtime = trt.Runtime(logger)
@@ -89,56 +121,116 @@ class TRTInference:
             self.ctx = self.engine.create_execution_context()
             self.input_name = "images"
             self.output_name = "output0"
+            # (1, 4 + num_classes, num_anchors)
+            self.output_shape = tuple(self.engine.get_tensor_shape(self.output_name))
+            self.num_classes = self.output_shape[1] - 4
             self.d_input = cuda.mem_alloc(trt.volume((1, 3, IMAGE_SIZE, IMAGE_SIZE)) * 4)
-            self.d_output = cuda.mem_alloc(trt.volume((1, 5, 8400)) * 4)
+            self.d_output = cuda.mem_alloc(trt.volume(self.output_shape) * 4)
             self.ctx.set_tensor_address(self.input_name, int(self.d_input))
             self.ctx.set_tensor_address(self.output_name, int(self.d_output))
             self.stream = cuda.Stream()
-            self.host_output = np.empty((1, 5, 8400), dtype=np.float32)
+            # Pinned host buffers: the driver can DMA straight from/to them
+            self.host_input = cuda.pagelocked_empty((1, 3, IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32)
+            self.host_output = cuda.pagelocked_empty(self.output_shape, dtype=np.float32)
         finally:
             self.device_ctx.pop()
 
-    def infer_detections(self, frame, conf_thres, nms_thres):
+    def close(self) -> None:
+        """Free device memory and pop the CUDA context.
+
+        Releases the GPU allocations so the process can be restarted without
+        hitting CUDA out-of-memory when the engine is loaded again.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self.device_ctx.push()
+        except Exception:  # noqa: BLE001 - context already gone
+            return
+        try:
+            self.d_input.free()
+            self.d_output.free()
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            try:
+                self.device_ctx.pop()
+            except Exception:  # noqa: BLE001
+                pass
+
+    @staticmethod
+    def preprocess(frame):
+        """CPU preprocess: BGR frame -> normalised NCHW float32 tensor."""
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+        img = img.astype(np.float32) / 255.0
+        img = np.transpose(img, (2, 0, 1))
+        return np.ascontiguousarray(np.expand_dims(img, axis=0))
+
+    def infer_tensor(self, tensor, width, height, conf_thres, nms_thres):
+        """Run TensorRT on a preprocessed tensor, return detections.
+
+        ``width``/``height`` are the source frame dimensions, used to map
+        the 640x640 model output back onto the original frame.
+
+        The raw output is (4 + num_classes) x anchors. The best class per
+        anchor is selected, then class-aware NMS suppresses overlapping
+        boxes of the same class only.
+        """
         self.device_ctx.push()
         try:
-            h, w = frame.shape[:2]
-            sx = w / IMAGE_SIZE
-            sy = h / IMAGE_SIZE
-            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-            img = img.astype(np.float32) / 255.0
-            img = np.transpose(img, (2, 0, 1))
-            img = np.ascontiguousarray(np.expand_dims(img, axis=0))
-            cuda.memcpy_htod_async(self.d_input, img, self.stream)
+            np.copyto(self.host_input, tensor)
+            cuda.memcpy_htod_async(self.d_input, self.host_input, self.stream)
             self.ctx.execute_async_v3(stream_handle=int(self.stream.handle))
             cuda.memcpy_dtoh_async(self.host_output, self.d_output, self.stream)
             self.stream.synchronize()
-            pred = self.host_output[0]
-            pred = np.transpose(pred, (1, 0))
-            confs = pred[:, 4]
-            mask = confs >= conf_thres
+            sx = width / IMAGE_SIZE
+            sy = height / IMAGE_SIZE
+            pred = np.transpose(self.host_output[0], (1, 0))  # (anchors, 4 + nc)
+            cls_scores = pred[:, 4:]
+            class_ids = np.argmax(cls_scores, axis=1)
+            scores = cls_scores[np.arange(len(class_ids)), class_ids]
+            mask = scores >= conf_thres
             dets = []
             if np.any(mask):
                 f = pred[mask]
-                scores = f[:, 4].astype(np.float32)
+                scores = scores[mask].astype(np.float32)
+                class_ids = class_ids[mask]
                 cxs, cys, ws, hs = f[:, 0], f[:, 1], f[:, 2], f[:, 3]
                 x1s = (cxs - ws / 2) * sx
                 y1s = (cys - hs / 2) * sy
                 x2s = (cxs + ws / 2) * sx
                 y2s = (cys + hs / 2) * sy
                 boxes = np.column_stack([x1s, y1s, x2s, y2s]).astype(np.float32)
-                idx = cv2.dnn.NMSBoxes(boxes.tolist(), scores.tolist(), conf_thres, nms_thres)
+                # Class-aware NMS: shifting each class into its own
+                # coordinate region stops two different classes from
+                # suppressing each other.
+                offset = class_ids.astype(np.float32) * 7680.0
+                nms_input = boxes.copy()
+                nms_input[:, 0] += offset
+                nms_input[:, 1] += offset
+                idx = cv2.dnn.NMSBoxes(nms_input.tolist(), scores.tolist(), conf_thres, nms_thres)
                 if len(idx):
                     for i in idx.flatten():
                         x1, y1, x2, y2 = boxes[i]
+                        class_id = int(class_ids[i])
                         dets.append({
                             "bbox": [max(0, int(x1)), max(0, int(y1)),
-                                     min(w - 1, int(x2)), min(h - 1, int(y2))],
+                                     min(width - 1, int(x2)), min(height - 1, int(y2))],
                             "confidence": float(scores[i]),
+                            "class_id": class_id,
+                            "label": CLASS_NAMES.get(class_id, f"class_{class_id}"),
                         })
             return dets
         finally:
             self.device_ctx.pop()
+
+    def infer_detections(self, frame, conf_thres, nms_thres):
+        """Preprocess + infer in one call (used by scripts and tests)."""
+        h, w = frame.shape[:2]
+        tensor = self.preprocess(frame)
+        return self.infer_tensor(tensor, w, h, conf_thres, nms_thres)
 
 
 BOX_TTL_FRAMES = 8  # how many frames a box stays visible after last detection
@@ -185,11 +277,15 @@ class BoxTracker:
                 alive[best_idx]["bbox"] = d["bbox"]
                 alive[best_idx]["confidence"] = d["confidence"]
                 alive[best_idx]["ttl_left"] = self.ttl
+                alive[best_idx]["class_id"] = d.get("class_id", 0)
+                alive[best_idx]["label"] = d.get("label", "pothole")
             else:
                 alive.append({
                     "bbox": d["bbox"],
                     "confidence": d["confidence"],
                     "ttl_left": self.ttl,
+                    "class_id": d.get("class_id", 0),
+                    "label": d.get("label", "pothole"),
                 })
 
         self.boxes = alive
@@ -200,6 +296,21 @@ class BoxTracker:
 
 
 class InferenceLoop:
+    """Three-thread inference pipeline.
+
+    producer  : video decode + CPU preprocess -> pre_queue
+    inference : pops preprocessed frames, runs TensorRT, tracks boxes,
+                and JPEG-encodes only while a subscriber is watching
+    db worker : batches pothole events into SQLite off the hot path
+
+    Splitting the work this way keeps the GPU fed without the request
+    thread paying for decode, preprocess, JPEG encoding and DB writes.
+    """
+
+    PRE_QUEUE_SIZE = 3
+    EVENT_BATCH_SIZE = 25
+    EVENT_FLUSH_SECONDS = 0.5
+
     def __init__(self, engine_path, video_path, conf, nms, every=1):
         self.engine_path = engine_path
         self.video_path = video_path
@@ -216,8 +327,39 @@ class InferenceLoop:
         self._lock = threading.Lock()
         self._stop = False
         self._last_save = 0
+        self._subscribers = 0
+        self._latest_jpeg = None
+        self._latest_seq = 0
+        self._pre_queue = queue.Queue(maxsize=self.PRE_QUEUE_SIZE)
+        self._event_queue = queue.Queue()
+        self._threads: list[threading.Thread] = []
+        self._closed = False
+
+    # -- lifecycle ---------------------------------------------------------
+    @property
+    def running(self):
+        """True while at least one worker thread is alive."""
+        return any(thread.is_alive() for thread in self._threads)
 
     def start(self):
+        """Start the worker threads, restarting cleanly if already run before.
+
+        Calling start() after stop() (or after the source video ran out) tears
+        the previous run down first, so the GPU allocations and the capture
+        are not leaked and the video restarts from the first frame.
+        """
+        if self.running:
+            return
+        self.close()  # release any previous run's GPU + capture
+        self._closed = False
+        self._stop = False
+        self._pre_queue = queue.Queue(maxsize=self.PRE_QUEUE_SIZE)
+        self._event_queue = queue.Queue()
+        self._latest_jpeg = None
+        self._latest_seq = 0
+        self._last_save = 0
+        self._t_start = time.perf_counter()
+        self._n_frames = 0
         try:
             self.model = TRTInference(self.engine_path)
         except Exception as e:
@@ -230,67 +372,201 @@ class InferenceLoop:
             self.stats["status"] = "error"
             return
         self.stats["status"] = "running"
+        for target, name in ((self._producer_loop, "producer"),
+                             (self._inference_loop, "inference"),
+                             (self._db_loop, "db")):
+            thread = threading.Thread(target=target, name=name, daemon=True)
+            thread.start()
+            self._threads.append(thread)
 
     def stop(self):
+        """Ask the worker threads to exit and wait for them to finish."""
         self._stop = True
+        for thread in self._threads:
+            if thread.is_alive():
+                thread.join(timeout=3)
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:  # noqa: BLE001
+                pass
+            self.cap = None
+        if self.stats.get("status") == "running":
+            self.stats["status"] = "stopped"
 
-    def read_frame(self):
-        """Read one frame, run inference, return (jpeg_bytes, stats_delta)."""
-        if self.model is None or self.cap is None or self._stop:
-            return None, None
-        ok, frame = self.cap.read()
-        if not ok:
-            if self.video_path:
-                self._stop = True  # stop after playing once, no loop
-            return None, None
-        t0 = time.perf_counter()
-        dets = self.model.infer_detections(frame, self.conf, self.nms)
-        infer_ms = (time.perf_counter() - t0) * 1000
+    def close(self):
+        """Stop all threads and release the GPU. Safe to call twice."""
+        if self._closed:
+            return
+        self._closed = True
+        self._stop = True
+        for thread in self._threads:
+            if thread.is_alive():
+                thread.join(timeout=3)
+        self._threads.clear()
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:  # noqa: BLE001
+                pass
+            self.cap = None
+        if self.model is not None:
+            self.model.close()
+            self.model = None
+        self.stats["status"] = "stopped"
 
-        # Temporal smoothing: keep boxes alive across frames (no flicker, no trails)
-        active_boxes = self.tracker.update(dets)
-        for b in active_boxes:
-            x1, y1, x2, y2 = b["bbox"]
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"pothole {b['confidence']:.2f}",
-                        (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                        (0, 255, 0), 2)
-        ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if not ok2:
-            return None, None
+    # -- subscribers -------------------------------------------------------
+    def add_subscriber(self):
         with self._lock:
-            self.stats["frames"] += 1
-            self.stats["last_frame_ms"] = round(infer_ms, 1)
-            self.stats["detections"] = len(dets)
-            self.stats["active_boxes"] = len(active_boxes)
-            self.stats["status"] = "running"
-            self._n_frames += 1
-            elapsed = time.perf_counter() - self._t_start
-            if elapsed >= 1.0:
-                self.stats["fps"] = round(self._n_frames / elapsed, 1)
-                self._n_frames = 0
-                self._t_start = time.perf_counter()
-            # Persist pothole events to the dashboard (rate-limited to ~1/sec)
-            now = time.perf_counter()
-            if dets and now - self._last_save >= 1.0:
-                self._last_save = now
-                import uuid as _uuid
-                # Save an annotated snapshot to /uploads so the dashboard can open it
-                snap_name = f"pothole_{int(now*1000)}_{_uuid.uuid4().hex[:8]}.jpg"
-                snap_path = UPLOADS_DIR / snap_name
-                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(snap_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                snap_url = f"/uploads/{snap_name}"
-                for d in dets:
-                    x1, y1, x2, y2 = d["bbox"]
-                    cx = (x1 + x2) / 2
-                    cy = (y1 + y2) / 2
-                    save_pothole("pothole", d["confidence"], 0.0, 0.0, snap_url)
-        return buf.tobytes(), dict(self.stats)
+            self._subscribers += 1
+
+    def remove_subscriber(self):
+        with self._lock:
+            self._subscribers = max(0, self._subscribers - 1)
+
+    def subscriber_count(self):
+        with self._lock:
+            return self._subscribers
+
+    def latest_frame(self):
+        """Return (jpeg_bytes, sequence) for the most recent encoded frame."""
+        with self._lock:
+            return self._latest_jpeg, self._latest_seq
+
+    # -- threads -----------------------------------------------------------
+    def _producer_loop(self):
+        """Decode + preprocess frames into the queue."""
+        while not self._stop:
+            try:
+                ok, frame = self.cap.read()
+            except Exception:  # noqa: BLE001
+                break
+            if not ok:
+                if self.video_path:
+                    self._stop = True  # plays once, no loop
+                    with self._lock:
+                        self.stats["status"] = "finished"
+                break
+            try:
+                tensor = self.model.preprocess(frame)
+                h, w = frame.shape[:2]
+                self._pre_queue.put((tensor, frame, w, h), timeout=0.5)
+            except queue.Full:
+                continue  # inference is behind; drop this frame
+            except Exception:  # noqa: BLE001
+                logging.exception("Preprocess failed")
+                break
+
+    def _inference_loop(self):
+        """Run TensorRT over preprocessed frames and publish JPEG output."""
+        while not self._stop:
+            try:
+                tensor, frame, width, height = self._pre_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                t0 = time.perf_counter()
+                dets = self.model.infer_tensor(tensor, width, height, self.conf, self.nms)
+                infer_ms = (time.perf_counter() - t0) * 1000
+
+                active_boxes = self.tracker.update(dets)
+
+                # Draw once: the same rendering feeds the snapshot and the feed.
+                for b in active_boxes:
+                    x1, y1, x2, y2 = b["bbox"]
+                    color = CLASS_COLORS.get(b.get("class_id", 0), (0, 255, 0))
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(frame, f"{b.get('label', 'pothole')} {b['confidence']:.2f}",
+                                (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                color, 2)
+
+                # Queue events for the batched DB writer.
+                now = time.perf_counter()
+                if dets and now - self._last_save >= 1.0:
+                    self._last_save = now
+                    self._event_queue.put((frame, dets))
+
+                # JPEG encode only while someone is watching the feed.
+                jpeg = None
+                if self.subscriber_count() > 0:
+                    ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    if ok2:
+                        jpeg = buf.tobytes()
+
+                with self._lock:
+                    self.stats["frames"] += 1
+                    self.stats["last_frame_ms"] = round(infer_ms, 1)
+                    self.stats["detections"] = len(dets)
+                    self.stats["active_boxes"] = len(active_boxes)
+                    self.stats["status"] = "running"
+                    self._n_frames += 1
+                    elapsed = time.perf_counter() - self._t_start
+                    if elapsed >= 1.0:
+                        self.stats["fps"] = round(self._n_frames / elapsed, 1)
+                        self._n_frames = 0
+                        self._t_start = time.perf_counter()
+                    if jpeg is not None:
+                        self._latest_jpeg = jpeg
+                        self._latest_seq += 1
+            except Exception:  # noqa: BLE001
+                logging.exception("Inference failed")
+                continue
+
+    def _db_loop(self):
+        """Batch pothole events into SQLite with a single reused connection."""
+        conn = None
+        pending: list[tuple] = []
+        last_flush = time.perf_counter()
+        try:
+            while not self._stop or pending or not self._event_queue.empty():
+                try:
+                    frame, dets = self._event_queue.get(timeout=0.2)
+                    snap_url = self._write_snapshot(frame)
+                    for d in dets:
+                        pending.append((d.get("label", "pothole"), d["confidence"],
+                                         0.0, 0.0, snap_url,
+                                         datetime.now(timezone.utc).isoformat()))
+                except queue.Empty:
+                    pass
+                except Exception:  # noqa: BLE001
+                    logging.exception("Failed to record pothole event")
+                now = time.perf_counter()
+                if pending and (len(pending) >= self.EVENT_BATCH_SIZE
+                                or now - last_flush >= self.EVENT_FLUSH_SECONDS):
+                    if conn is None:
+                        conn = sqlite3.connect(DB_PATH)
+                    conn.executemany(
+                        "INSERT INTO potholes (label, confidence, latitude, longitude, timestamp, image_path)"
+                        " VALUES (?, ?, ?, ?, ?, ?)", pending)
+                    conn.commit()
+                    pending = []
+                    last_flush = now
+        finally:
+            if conn is not None:
+                try:
+                    if pending:
+                        conn.executemany(
+                            "INSERT INTO potholes (label, confidence, latitude, longitude, timestamp, image_path)"
+                            " VALUES (?, ?, ?, ?, ?, ?)", pending)
+                        conn.commit()
+                except Exception:  # noqa: BLE001
+                    pass
+                conn.close()
+
+    def _write_snapshot(self, frame) -> str:
+        """Persist an annotated snapshot and return its /uploads URL."""
+        import uuid as _uuid
+        name = f"pothole_{int(time.time()*1000)}_{_uuid.uuid4().hex[:8]}.jpg"
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(UPLOADS_DIR / name), frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        return f"/uploads/{name}"
 
     def get_stats(self):
         with self._lock:
-            return dict(self.stats)
+            stats = dict(self.stats)
+            stats["subscribers"] = self._subscribers
+            stats["running"] = self.running
+            return stats
 
 
 _inference = None
@@ -308,6 +584,36 @@ def get_inference() -> InferenceLoop:
             _inference = InferenceLoop(engine, video, conf, nms)
             _inference.start()
         return _inference
+
+
+def shutdown_inference():
+    """Release GPU resources. Registered with atexit and FastAPI shutdown.
+
+    Without this the CUDA allocations survive the process and the next
+    start fails with "Cuda Runtime (out of memory)" while loading the
+    engine.
+    """
+    global _inference
+    with _inference_lock:
+        loop = _inference
+        _inference = None
+    if loop is not None:
+        logging.info("Shutting down inference pipeline")
+        loop.close()
+
+
+atexit.register(shutdown_inference)
+
+
+@app.on_event("shutdown")
+async def _release_inference():
+    """Free the GPU when the ASGI server shuts down.
+
+    The atexit hook alone is not enough for a Uvicorn reload or a clean
+    SIGTERM: the process may keep the CUDA context alive and the next
+    start fails with "Cuda Runtime (out of memory)".
+    """
+    shutdown_inference()
 
 
 # ---------------------------------------------------------------------------
@@ -356,16 +662,33 @@ async def shell():
 
 @app.get("/video-feed")
 async def video_feed():
+    """Stream the live inference output as multipart MJPEG.
+
+    The pipeline encodes JPEG only while at least one subscriber is
+    connected, so this endpoint registers itself as a subscriber for the
+    lifetime of the response and unregisters on disconnect.
+    """
     inf = get_inference()
 
-    def gen():
-        while not inf._stop:
-            jpeg, _ = inf.read_frame()
-            if jpeg is None:
-                time.sleep(0.01)
-                continue
-            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
-            time.sleep(1.0 / 30.0)
+    async def gen():
+        inf.add_subscriber()
+        last_seq = -1
+        last_yield = time.perf_counter()
+        try:
+            while True:
+                jpeg, seq = inf.latest_frame()
+                if jpeg is not None and seq != last_seq:
+                    last_seq = seq
+                    last_yield = time.perf_counter()
+                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
+                else:
+                    await asyncio.sleep(0.01)
+                    # End the stream once the pipeline is done and idle, so the
+                    # browser does not wait forever on a video that has ended.
+                    if not inf.running and (time.perf_counter() - last_yield) > 1.0:
+                        break
+        finally:
+            inf.remove_subscriber()
 
     return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
@@ -379,18 +702,14 @@ async def video_feed_stats():
 async def stop_feed():
     inf = get_inference()
     inf.stop()
-    return {"ok": True}
+    return {"ok": True, "status": inf.stats["status"]}
 
 
 @app.post("/api/feed/start")
 async def start_feed():
     inf = get_inference()
-    inf._stop = False
-    inf.stats["status"] = "running"
-    # Reset video to the beginning for a fresh start
-    if inf.cap is not None:
-        inf.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    return {"ok": True}
+    inf.start()
+    return {"ok": True, "status": inf.stats["status"]}
 
 
 @app.get("/potholes")
@@ -532,6 +851,7 @@ async def start_train():
          "--device", os.getenv("YOLO_DEVICE", "cuda:0")],
         cwd=str(INFERENCE_DIR),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env=cuda_lib_env(),
     )
     threading.Thread(target=_train_reader, daemon=True).start()
     return {"status": "started"}

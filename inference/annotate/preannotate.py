@@ -13,9 +13,11 @@ from PIL import Image
 try:
     from .classes import CLASS_IDS, CLASS_NAMES
     from .schema import Detection, FrameRecord, write_json_atomic, write_yolo_label
+    from .env_setup import ensure_cuda_libs
 except ImportError:  # Running directly as: python preannotate.py
     from classes import CLASS_IDS, CLASS_NAMES
     from schema import Detection, FrameRecord, write_json_atomic, write_yolo_label
+    from env_setup import ensure_cuda_libs
 
 logger = logging.getLogger("annotate_preannotate")
 
@@ -179,6 +181,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    ensure_cuda_libs()  # re-exec with pip-installed CUDA libs on the loader path
     parser = argparse.ArgumentParser(description="Pre-annotate frames with the local YOLO model")
     parser.add_argument("--source", required=True, help="Image directory or video file")
     parser.add_argument("--out", default="annotations", help="Annotation workspace directory")

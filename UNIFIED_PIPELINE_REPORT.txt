@@ -137,26 +137,62 @@ Stop/Start Feed
   the feed resumes from the beginning.
 - Browser has Start/Restart and Stop buttons wired to these endpoints.
 
-Performance Characteristics (verified on demo.mp4, 692 frames)
----------------------------------------------------------------
-Pure INT8 inference (no UI):       ~102 FPS,  9.8 ms/frame
-With cv2.imshow display:           ~30-50 FPS, 19.2 ms/frame
-Whole FastAPI pipeline (port 8000): ~13 FPS,  ~24 ms/frame
+ Performance Characteristics (verified on demo.mp4, 692 frames)
+ ---------------------------------------------------------------
+ Pure INT8 inference (no UI):       ~102 FPS,  9.8 ms/frame
+ With cv2.imshow display:           ~30-50 FPS, 19.2 ms/frame
+ Whole FastAPI pipeline (port 8000): ~13 FPS,  ~24 ms/frame
 
-Model speed is not the bottleneck; UI, JPEG encoding, HTTP streaming,
-SQLite writes, and OpenCV preprocessing dominate the end-to-end pipeline.
+ Model speed is not the bottleneck; UI, JPEG encoding, HTTP streaming,
+ SQLite writes, and OpenCV preprocessing dominate the end-to-end pipeline.
 
-Key Files
----------
-inference/app.py:101   - TRTInference.infer_detections (CUDA push/pop)
-inference/app.py:144   - BoxTracker (IoU-matched temporal smoothing)
-inference/app.py:236   - InferenceLoop.read_frame (per-frame pipeline)
-inference/app.py:302   - save_pothole (SQLite event logging)
-inference/app.py:354   - /api/feed/stop and /api/feed/start endpoints
-inference/app.py:377   - /api/potholes/clear endpoint
-inference/shell.html   - Dashboard UI with tabs, feed, map, events
-inference/annotate/annotate.html - Canvas annotation UI with auto-save
-inference/annotate/annotation_app.py - Annotation FastAPI sub-app
+ ---------------------------------------------------------------
+ UPDATE 2026-10-21 - three-thread pipeline, 13 FPS -> 42.6 FPS
+ ---------------------------------------------------------------
+ The whole-pipeline figure above is superseded. InferenceLoop now runs
+ three threads instead of one:
+
+   producer   video decode + CPU preprocess -> pre_queue (depth 3)
+   inference  TensorRT + BoxTracker + drawing + JPEG encode
+   db worker  batches pothole events into SQLite (25 rows or 0.5 s)
+
+   - Pinned (page-locked) host buffers for input and output.
+   - JPEG is encoded ONLY while at least one client is watching
+     /video-feed. The subscriber count is tracked by the loop and the
+     feed endpoint registers/unregisters itself.
+   - SQLite writes are batched off the hot path on a reused connection.
+   - /video-feed no longer pulls a frame per request; it reads the
+     latest published JPEG and yields it when the sequence advances.
+   - TRTInference.close() frees the device buffers and pops the CUDA
+     context; it is called from atexit AND from the FastAPI shutdown
+     hook, so a restart no longer hits "Cuda Runtime (out of memory)".
+
+ Measured with a real MJPEG client connected:
+
+   Frames delivered over the wire     213 frames in 5 s  = 42.6 FPS
+   Inference latency                   8.7 ms/frame
+   Inference throughput (no client)   ~98 FPS
+   Status transitions                 running -> finished on EOF,
+                                      restart via /api/feed/start
+
+ See RETRAINED_MODEL_REPORT.txt for the retrained 10-class engine
+ (mAP50 0.527 vs 0.402 for the original at conf 0.15, same speed) and
+ for the engine-vs-PyTorch-vs-ground-truth parity numbers.
+
+ Key Files
+ ---------
+ inference/app.py:101   - TRTInference.infer_detections (CUDA push/pop)
+ inference/app.py:144   - BoxTracker (IoU-matched temporal smoothing)
+ inference/app.py:236   - InferenceLoop.read_frame (per-frame pipeline)
+ inference/app.py:302   - save_pothole (SQLite event logging)
+ inference/app.py:354   - /api/feed/stop and /api/feed/start endpoints
+ inference/app.py:377   - /api/potholes/clear endpoint
+ inference/shell.html   - Dashboard UI with tabs, feed, map, events
+ inference/annotate/annotate.html - Canvas annotation UI with auto-save
+ inference/annotate/annotation_app.py - Annotation FastAPI sub-app
+ inference/validate_engine_parity.py - Engine vs PyTorch vs labels
+ inference/build_int8_engine.py      - INT8 engine builder (calibrator)
+
 
 =======================================================================
 ISSUES SOLVED (this session)
@@ -173,6 +209,13 @@ ISSUES SOLVED (this session)
 | 7 | Annotation workspace empty — no frames/labels for the annotate tab | Pre-extracted 70 frames from demo.mp4 and ran INT8 inference to populate manifest.json, predictions.json, YOLO labels |
 | 8 | Annotations didn't transfer between frames — edits lost on Prev/Next without manual Save | loadFrame() auto-saves dirty state before navigating |
 | 9 | Video looped infinitely — feed never stopped after EOF | read_frame() sets _stop=True on EOF; plays once unless restarted |
+| 10 | /video-feed crashed after the pipeline refactor — the route still called the removed `read_frame()` method and polled `_stop`, so every request raised AttributeError | Route rewritten to the publisher/subscriber model: it registers as a subscriber, reads the latest published JPEG, yields it when the sequence advances, and unregisters on disconnect |
+| 11 | Feed hung forever after the video ended — the generator kept the response open with no new frames | The generator closes the stream once the pipeline is idle and no frame has arrived for 1 s; status becomes "finished" and the Restart button rewinds the capture |
+| 12 | Restarting the feed did not actually restart it — the old route only cleared a flag, the threads were already dead | InferenceLoop.start() is now idempotent: it tears down the previous run (freeing the GPU and the capture) and starts fresh threads, rewinding the video |
+| 13 | Engine load failed with "Cuda Runtime (out of memory)" after a restart | TRTInference.close() frees the device buffers and pops the CUDA context; registered with atexit AND the FastAPI shutdown hook |
+| 14 | INT8 engine build from a freshly exported ONNX failed with "Input tensor images has static dimensions that don't match kMAX dimensions in profile index 0" | build_int8_engine.py reads the input shape off the parsed network and builds a min=opt=max profile that matches a static input |
+| 15 | The retrained model is 10-class, but the runtime hardcoded the 1-class output shape (1,5,8400) and labelled every detection "pothole" | Output shape is read from the engine, the best class per anchor is selected, class-aware NMS is used, and class_id/label flow through the tracker, the overlay colours and the DB rows |
+| 16 | Training OOM'd on the Orin Nano and reported "NVML_SUCCESS == r INTERNAL ASSERT FAILED" instead of "out of memory" | Root cause identified: 1536 MB is the largest CUDA allocation that succeeds here, so training must run at batch 1. The NVML message is a Tegra driver artefact, not a torch bug |
 
 =======================================================================
 CURRENT ISSUES (open)
@@ -180,18 +223,20 @@ CURRENT ISSUES (open)
 
 | # | Issue | Severity |
 |---|-------|----------|
-| 1 | Pipeline FPS is slow (~13 FPS) — pure TRT infer is ~102 FPS but the whole FastAPI pipeline serves only ~13 FPS | High |
-| 2 | GPU OOM on restart — old Python process holds CUDA memory; restarting without killing first causes `out of memory` engine load failure | Medium |
+| 1 | RESOLVED — pipeline FPS was ~13 FPS; the three-thread refactor (producer / inference / db worker), subscriber-gated JPEG encoding, pinned host buffers and batched SQLite writes brought it to 42.6 FPS over the wire with 8.7 ms inference latency | Resolved |
+| 2 | RESOLVED — GPU OOM on restart; TRTInference.close() now frees the device buffers and pops the CUDA context, called from atexit and from the FastAPI shutdown hook | Resolved |
 | 3 | Annotation server runs on separate port (8765) — iframe to /annotate works within app.py but the standalone annotate app is a separate process | Low |
 | 4 | demo.mp4 hardcoded — no dynamic video upload/switching in the UI yet | Low |
+| 5 | 9 of the 10 anomaly classes have no training labels — the model head is present and the runtime handles all 10 classes, but only class 0 has any training signal | High |
+| 6 | The retrained INT8 engine keeps 0.644 of the 0.840 mAP50 of its FP32 source — post-training quantization cost; quantization-aware training would close most of it | Medium |
 
-=======================================================================
+======================================================================
 FUTURE SOLUTIONS (incl. FPS improvement)
-=======================================================================
+======================================================================
 
-FPS Issue — Pipeline is ~13 FPS; target is closer to model speed (~100 FPS)
+FPS Issue — RESOLVED 2026-10-21 (was ~13 FPS, now 42.6 FPS)
 
-Root cause: The bottleneck is NOT the INT8 model (8.6-9.8 ms/frame = ~102 FPS). It is the stack around it:
+Root cause: The bottleneck was NOT the INT8 model (8.6-9.8 ms/frame = ~102 FPS). It was the stack around it:
 - OpenCV CPU preprocessing (VideoCapture.read, RGB convert, resize, NMS)
 - JPEG encoding per frame (quality 80)
 - HTTP multipart streaming overhead
@@ -199,24 +244,31 @@ Root cause: The bottleneck is NOT the INT8 model (8.6-9.8 ms/frame = ~102 FPS). 
 - BoxTracker + stats bookkeeping per frame
 - uvicorn threadpool context switching
 
-Actions to raise pipeline FPS:
-1. Batch/async preprocessing — move OpenCV resize/color conversion off the inference thread; a separate producer thread reads/preprocesses frames into a queue, inference thread consumes
-2. Skip JPEG encode when no client is connected — only encode/draw when /video-feed has an active subscriber
-3. Reduce SQLite write frequency — batch pothole events (write every N frames or on confidence change) instead of ~1/sec
-4. Use shared memory / zero-copy — pass frames between threads via numpy shared buffers instead of re-encoding
-5. Run inference on a dedicated CUDA stream with pinned host memory — eliminate memcpy overhead
-6. Lower JPEG quality or downscale output for the web feed (e.g., 640px max width) to reduce encode time
-7. Consider FP16 on Orin iGPU or quantized-aware retraining to close the confidence gap at the 0.25 threshold
+Actions taken:
+1. DONE — Async preprocessing: a producer thread reads and preprocesses frames into a queue, the inference thread consumes
+2. DONE — Skip JPEG encode when no client is connected; the feed endpoint registers as a subscriber and unregisters on disconnect
+3. DONE — Batch SQLite writes (25 rows or 0.5 s) on a reused connection
+4. PARTIAL — frames still pass through the queue as numpy copies, not shared memory
+5. DONE — dedicated CUDA stream with pinned (page-locked) host buffers for input and output
+6. OPEN — lower JPEG quality or downscale the web feed output
+7. OPEN — quantization-aware retraining to close the INT8 confidence gap
+
+Remaining FPS headroom: the engine runs at 8.7 ms/frame, the pipeline at
+23.5 ms/frame, so decode + preprocess + JPEG + HTTP still costs ~15 ms.
+Steps 4 and 6 are the next wins.
 
 Other Future Improvements:
 
 | Area | Solution |
 |------|----------|
 | Dynamic video source | Add /api/video/set-source endpoint to switch videos without restart; file upload to uploads/ |
-| GPU memory cleanup | Add atexit / shutdown handler to explicitly free CUDA buffers and pop context on app exit |
+| GPU memory cleanup | DONE — atexit + FastAPI shutdown hook free the CUDA buffers and pop the context |
 | Unified port | Merge annotation_app.py into app.py so everything runs on port 8000 (no iframe to 8765) |
 | GPS-tagged events | Integrate gnss.py to attach real lat/lng to pothole events instead of 0.0 |
 | Retraining loop | Connect Train tab output (new best_int8.engine) to auto-reload the running inference model without restart |
 | Health monitoring | Add GPU memory/temperature telemetry to /health endpoint |
+| Class coverage | Label the 9 non-pothole classes - currently 520 boxes, all class 0 |
+| Quantization | Quantization-aware training to reduce the 0.840 -> 0.644 mAP50 INT8 gap |
+
 
 =======================================================================

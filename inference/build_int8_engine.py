@@ -100,9 +100,12 @@ def build_int8_engine(
     output_path: str,
     batch_size: int,
     workspace_size: int = 2048,
+    cache_file: Path | None = None,
 ) -> str:
     """Build an INT8 TensorRT engine from ONNX with image-based calibration."""
     TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+    cache_path = Path(cache_file) if cache_file else CACHE_FILE
 
     builder = trt.Builder(TRT_LOGGER)
     network = builder.create_network(
@@ -120,16 +123,28 @@ def build_int8_engine(
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_size << 20)
     config.set_flag(trt.BuilderFlag.INT8)
 
+    # The exported ONNX may have a static shape (1,3,640,640) or a dynamic
+    # batch (-1). TensorRT rejects a profile whose max batch differs from a
+    # static input, so read the real shape off the parsed network.
+    input_shape = tuple(network.get_input(0).shape)
+    static = all(dim > 0 for dim in input_shape)
+    if static:
+        profile_shape = (input_shape, input_shape, input_shape)
+        profile_batch = int(input_shape[0])
+    else:
+        profile_shape = ((1, 3, IMAGE_SIZE, IMAGE_SIZE),
+                         (1, 3, IMAGE_SIZE, IMAGE_SIZE),
+                         (batch_size, 3, IMAGE_SIZE, IMAGE_SIZE))
+        profile_batch = batch_size
+
     # Create optimization profile for dynamic input
     profile = builder.create_optimization_profile()
-    profile.set_shape(INPUT_NAME, (1, 3, IMAGE_SIZE, IMAGE_SIZE),
-                      (1, 3, IMAGE_SIZE, IMAGE_SIZE),
-                      (batch_size, 3, IMAGE_SIZE, IMAGE_SIZE))
+    profile.set_shape(INPUT_NAME, *profile_shape)
     config.add_optimization_profile(profile)
     config.set_calibration_profile(profile)
 
     # Create calibrator
-    calibrator = ImageBatchStream(calib_files, batch_size, CACHE_FILE)
+    calibrator = ImageBatchStream(calib_files, profile_batch, cache_path)
     config.int8_calibrator = calibrator
 
     logger.info("Building INT8 engine (this may take a while)...")
@@ -150,6 +165,8 @@ def main() -> None:
     parser.add_argument("--onnx", default=str(DEFAULT_ONNX), help="Path to ONNX model")
     parser.add_argument("--calib-dir", default=str(DEFAULT_CALIB_DIR), help="Calibration images directory")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Output engine path")
+    parser.add_argument("--cache", default=str(CACHE_FILE),
+                        help="Calibration cache path (use a separate file per model)")
     parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument("--image-size", type=int, default=IMAGE_SIZE, help="Input image size")
     parser.add_argument("--workspace", type=int, default=2048, help="Workspace size in MB")
@@ -164,8 +181,9 @@ def main() -> None:
     calib_files = calib_files[: args.num_calib]
     logger.info("Using %d calibration images from %s", len(calib_files), args.calib_dir)
 
-    if CACHE_FILE.exists():
-        logger.info("Calibration cache exists, re-using: %s", CACHE_FILE)
+    cache_file = Path(args.cache)
+    if cache_file.exists():
+        logger.info("Calibration cache exists, re-using: %s", cache_file)
 
     build_int8_engine(
         onnx_path=args.onnx,
@@ -173,6 +191,7 @@ def main() -> None:
         output_path=args.output,
         batch_size=args.calib_batch_size,
         workspace_size=args.workspace,
+        cache_file=cache_file,
     )
 
 

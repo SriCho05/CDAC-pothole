@@ -86,3 +86,22 @@ inference/tests/artifacts/
 *.docx
 Screenshot_*.jpg
 package-lock.json
+
+# Generated training / quantization artifacts
+# The engines and ONNX graphs are reproducible from inference/annotate/
+# train_pipeline.py, so the binaries are not versioned. The JSON
+# measurement reports next to them are.
+inference/retrained/*.engine
+inference/retrained/*.onnx
+inference/retrained/*.pt
+inference/retrained/*.cache
+inference/retrained/*.mp4
+inference/annotations/yolo_dataset/
+inference/annotations/export/
+inference/annotations/.export_done
+inference/calib_images/
+inference/calibration.cache
+inference/*.engine
+inference/*.mp4
+inference/threshold_comparison/*.mp4
+runs/

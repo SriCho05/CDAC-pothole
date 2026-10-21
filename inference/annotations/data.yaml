@@ -1,0 +1,6 @@
+path: /home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole/inference/annotations/yolo_dataset
+train: images/train
+val: images/val
+test: images/test
+nc: 10
+names: ['pothole', 'crack_transverse', 'crack_longitudinal', 'rutting', 'debris', 'waterlogging', 'missing_lane_marking', 'edge_break', 'manhole', 'road_barrier']

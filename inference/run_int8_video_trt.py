@@ -25,6 +25,13 @@ import pycuda.driver as cuda
 import pycuda.autoinit  # noqa: F401
 import tensorrt as trt
 
+try:  # packaged import
+    from annotate.classes import CLASS_NAMES  # type: ignore
+except Exception:  # running directly from inference/
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from annotate.classes import CLASS_NAMES  # type: ignore
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("int8_trt")
 
@@ -79,20 +86,30 @@ class FrameReader:
 def postprocess(pred: np.ndarray, conf_thres: float, scale_x: float, scale_y: float) -> list:
     """Decode YOLO output and apply NMS.
 
-    pred shape: (1, 5, 8400) -> per anchor: [x_center, y_center, width, height, conf]
+    pred shape: (1, 4 + nc, 8400) -> per anchor: [x_center, y_center, width, height, cls...]
+    Works for the 1-class engine (nc=1) and the retrained 10-class engine.
     Bbox values are in 640x640 pixel coordinates.
     """
-    pred = pred[0]  # (5, 8400)
-    pred = np.transpose(pred, (1, 0))  # (8400, 5)
+    pred = pred[0]  # (4 + nc, 8400)
+    pred = np.transpose(pred, (1, 0))  # (8400, 4 + nc)
+
+    num_classes = pred.shape[1] - 4
+    if num_classes <= 1:
+        class_ids = np.zeros(len(pred), dtype=np.int32)
+        scores_all = pred[:, 4]
+    else:
+        cls_scores = pred[:, 4:]
+        class_ids = np.argmax(cls_scores, axis=1)
+        scores_all = cls_scores[np.arange(len(class_ids)), class_ids]
 
     # Filter by confidence (vectorized)
-    confs = pred[:, 4]
-    mask = confs >= conf_thres
+    mask = scores_all >= conf_thres
     if not np.any(mask):
         return []
 
     filtered = pred[mask]
-    confs_filtered = filtered[:, 4]
+    confs_filtered = scores_all[mask]
+    class_ids = class_ids[mask]
 
     cxs = filtered[:, 0]
     cys = filtered[:, 1]
@@ -107,17 +124,26 @@ def postprocess(pred: np.ndarray, conf_thres: float, scale_x: float, scale_y: fl
     boxes = np.column_stack([x1s, y1s, x2s, y2s]).astype(np.float32)
     scores = confs_filtered.astype(np.float32)
 
-    indices = cv2.dnn.NMSBoxes(boxes.tolist(), scores.tolist(), conf_thres, 0.45)
+    # Class-aware NMS: each class gets its own coordinate region so
+    # different classes never suppress each other.
+    offset = class_ids.astype(np.float32) * 7680.0
+    nms_input = boxes.copy()
+    nms_input[:, 0] += offset
+    nms_input[:, 1] += offset
+
+    indices = cv2.dnn.NMSBoxes(nms_input.tolist(), scores.tolist(), conf_thres, 0.45)
     if len(indices) == 0:
         return []
 
     result = []
     for idx in indices.flatten():
         x1, y1, x2, y2 = boxes[idx]
+        class_id = int(class_ids[idx])
         result.append({
             "bbox": [int(max(0, x1)), int(max(0, y1)), int(min(65535, x2)), int(min(65535, y2))],
             "confidence": float(scores[idx]),
-            "class_id": 0,
+            "class_id": class_id,
+            "label": CLASS_NAMES.get(class_id, f"class_{class_id}"),
         })
     return result
 
@@ -218,7 +244,8 @@ def run(engine_path: str, video_path: str, confidence: float, output_path: str,
             x2 = min(width - 1, x2)
             y2 = min(height - 1, y2)
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame, f"pothole {det['confidence']:.2f}", (x1, max(20, y1 - 8)),
+            cv2.putText(frame, f"{det.get('label', 'pothole')} {det['confidence']:.2f}",
+                        (x1, max(20, y1 - 8)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         if save_video:

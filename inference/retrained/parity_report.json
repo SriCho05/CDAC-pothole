@@ -1,0 +1,134 @@
+{
+  "model": "inference/retrained/best_retrained.pt",
+  "engine": "inference/retrained/best_retrained_int8.engine",
+  "engine_num_classes": 10,
+  "frames_tested": 70,
+  "confidence_threshold": 0.15,
+  "iou_threshold": 0.5,
+  "ground_truth_boxes": 520,
+  "engine_vs_pytorch": {
+    "matched_boxes": 311,
+    "engine_detections": 332,
+    "pytorch_detections": 605,
+    "agreement_precision": 0.9367,
+    "agreement_recall": 0.514,
+    "note": "greedy IoU>=0.5 match between engine and PyTorch detections"
+  },
+  "engine_vs_ground_truth": {
+    "mAP50": 0.5269,
+    "precision": 1.0,
+    "recall": 0.5288
+  },
+  "pytorch_vs_ground_truth": {
+    "mAP50": 0.8404,
+    "precision": 1.0,
+    "recall": 0.8423
+  },
+  "threshold_sweep": [
+    {
+      "confidence": 0.01,
+      "detections": 932,
+      "mAP50": 0.6442,
+      "precision": 1.0,
+      "recall": 0.6462
+    },
+    {
+      "confidence": 0.02,
+      "detections": 728,
+      "mAP50": 0.6442,
+      "precision": 1.0,
+      "recall": 0.6462
+    },
+    {
+      "confidence": 0.03,
+      "detections": 622,
+      "mAP50": 0.6308,
+      "precision": 1.0,
+      "recall": 0.6327
+    },
+    {
+      "confidence": 0.04,
+      "detections": 564,
+      "mAP50": 0.6269,
+      "precision": 1.0,
+      "recall": 0.6288
+    },
+    {
+      "confidence": 0.05,
+      "detections": 517,
+      "mAP50": 0.6212,
+      "precision": 1.0,
+      "recall": 0.6231
+    },
+    {
+      "confidence": 0.06,
+      "detections": 488,
+      "mAP50": 0.6154,
+      "precision": 1.0,
+      "recall": 0.6173
+    },
+    {
+      "confidence": 0.08,
+      "detections": 430,
+      "mAP50": 0.6,
+      "precision": 1.0,
+      "recall": 0.6019
+    },
+    {
+      "confidence": 0.1,
+      "detections": 391,
+      "mAP50": 0.5788,
+      "precision": 1.0,
+      "recall": 0.5808
+    },
+    {
+      "confidence": 0.12,
+      "detections": 365,
+      "mAP50": 0.5558,
+      "precision": 1.0,
+      "recall": 0.5577
+    },
+    {
+      "confidence": 0.15,
+      "detections": 332,
+      "mAP50": 0.5269,
+      "precision": 1.0,
+      "recall": 0.5288
+    },
+    {
+      "confidence": 0.2,
+      "detections": 276,
+      "mAP50": 0.4712,
+      "precision": 1.0,
+      "recall": 0.4731
+    },
+    {
+      "confidence": 0.25,
+      "detections": 232,
+      "mAP50": 0.4135,
+      "precision": 1.0,
+      "recall": 0.4154
+    },
+    {
+      "confidence": 0.3,
+      "detections": 198,
+      "mAP50": 0.3615,
+      "precision": 1.0,
+      "recall": 0.3635
+    },
+    {
+      "confidence": 0.4,
+      "detections": 132,
+      "mAP50": 0.2481,
+      "precision": 1.0,
+      "recall": 0.25
+    },
+    {
+      "confidence": 0.5,
+      "detections": 81,
+      "mAP50": 0.1538,
+      "precision": 1.0,
+      "recall": 0.1558
+    }
+  ]
+}
