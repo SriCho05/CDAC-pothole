@@ -5,269 +5,226 @@ Date        : 2026-10-21
 Repo        : github.com/SriCho05/CDAC-pothole
 Project root: /home/edgeai/Documents/Srikaanth CDAC/CDAC-pothole
 Device      : NVIDIA Jetson Orin Nano, JetPack R36.4.7, CUDA 12.6, TensorRT 10.3.0
-Last commit : 3868464 "Add POC development plan gap analysis"
+Last commit : 3a7fd92 "Retrain 10-class model, build INT8 engine, and refactor
+              pipeline to 42.6 FPS"
 
-Purpose of this file: full state handover so the work can continue in a
-fresh chat session without re-deriving context.
-
---------------------------------------------------------------------------------
-1. HEADLINE OBJECTIVE
---------------------------------------------------------------------------------
-Deliver a unified FastAPI pothole-management dashboard with live INT8
-TensorRT inference, GIS/event persistence, annotation, retraining and
-deployment workflows, and a documented FP16-vs-INT8 comparison.
-
-Current phase: close the retraining loop - export the retrained model to
-ONNX, build the INT8 TensorRT engine, benchmark it against the existing
-INT8/FP16 engines, and validate the optimized live pipeline.
+This file is the state handover for the next session. The retraining /
+quantization / pipeline work described below is DONE, committed and
+validated. What remains is listed in section 7.
 
 --------------------------------------------------------------------------------
-2. WHAT IS DONE AND VERIFIED
+1. HEADLINE RESULT OF THIS SESSION
 --------------------------------------------------------------------------------
-2.1 Inference / performance (all previously benchmarked, numbers in reports)
-  - INT8 TensorRT engine built: inference/best_int8.engine (13.0 MB)
-  - Pure-inference speed on demo.mp4: ~102 FPS (692 frames, 9.8 ms/frame)
-  - Display-mode throughput observed: 30-50 FPS
-  - Whole-pipeline (decode+infer+draw+encode+DB): ~13 FPS  <- the bottleneck
-  - 10 anomaly classes wired end to end (pothole, crack_transverse,
-    crack_longitudinal, rutting, debris, waterlogging,
-    missing_lane_marking, edge_break, manhole, road_barrier)
-  - INT8 calibration set: inference/calib_images (2,500 images)
-  - Calibration cache: inference/calibration.cache (12.9 KB)
-
-2.2 Unified FastAPI dashboard (inference/app.py, inference/shell.html)
-  - Live MJPEG feed at /video-feed, stats at /video-feed-stats
-  - GIS map, saved-event list with clickable /uploads snapshots, clear-all
-  - Stop/start feed endpoints
-  - Annotation workspace served from the same app on port 8000
-    (/annotate, /api/frames, /api/frames/{id}, /api/frames/{id}/meta,
-     /api/frames/{id}/image, /api/export, /api/classes)
-  - Training tab: /api/train, /api/train/status, /api/pipeline/status,
-    /api/pipeline/proceed
-  - Timeline endpoint: /api/timeline
-  - SQLite persistence: inference/potholes.db (table `potholes`:
-     id, label, confidence, latitude, longitude, timestamp, image_path)
-
-2.3 Annotation / training toolchain (inference/annotate/)
-  - classes.py, schema.py (FrameRecord/Detection, to_payload() emits the
-    exact POC JSON contract), COCO builder, YOLO label writer
-  - annotate.html canvas UI: class / severity / confidence / depth / area /
-    ignore editing, auto-save on navigation
-  - preannotate.py: video -> frames -> pre-annotated boxes
-  - 70 demo frames pre-annotated (215 detections) in
-    inference/annotations/{frames,labels,export}
-  - train_pipeline.py: dataset prep -> train -> ONNX -> TensorRT
-  - validate_engine.py: TensorRT validation + thermal_zone0 temperature read
-
-2.4 GNSS
-  - inference/gnss.py: NMEA GGA/RMC parser + serial background thread
-  - NOT yet wired into the live detection loop (backlog P0 item 1)
-
-2.5 Documentation (all at project root, pushed to GitHub main)
-  POC_STATUS_REPORT.txt, POC_GAP_ANALYSIS.txt, COMPLETE_TECHNICAL_REPORT.txt,
-  FPS_OPTIMIZATION_REPORT.txt, INT8_ENGINE_REPORT.txt,
-  INT8_VS_FP16_COMPARISON_REPORT.txt, UNIFIED_PIPELINE_REPORT.txt,
-  ANNOTATION_PIPELINE_REPORT.txt, EO_IR_FUSION_REPORT.txt,
-  SENSOR_INTEGRATION_PLAN.txt, JETSON_RUN_GUIDE.txt, WORK_LOG_2026-10-15.md
-
-2.6 Environment fix (JetPack-specific, new this session)
-  - inference/annotate/env_setup.py
-    * ensure_cuda_libs(): re-execs the process with LD_LIBRARY_PATH set so
-      pip-installed libcudss.so.0 is found (import torch fails otherwise)
-    * PYTORCH_NVML_BASED_CUDA_CHECK=0 - required because NVML is only
-      partially supported on the Tegra iGPU and otherwise torch's caching
-      allocator raises "NVML_SUCCESS == r INTERNAL ASSERT FAILED"
-    * cuda_lib_env(): returns the env dict for subprocess spawning
-  - Wired into preannotate.py, train_pipeline.py, app.py (train subprocess)
+  - Retrained the 10-class model for 50 epochs (was 2 epochs, unconverged):
+    mAP50 0.010 -> 0.849 on the validation split.
+  - Exported ONNX (opset 12) and built the INT8 TensorRT engine
+    (13.3 MB, 500-image entropy calibration).
+  - The new engine beats the original INT8 engine by 26-38 % mAP50 at every
+    confidence threshold up to 0.30, with identical precision, and at the
+    same speed (83.2 vs 79.8 inference-only FPS).
+  - The retrained engine reproduces its PyTorch source with 93.7 % agreement
+    (IoU >= 0.5) vs 56.6 % for the original engine - i.e. INT8 quantization
+    costs the new model far less accuracy than it cost the old one.
+  - Refactored the live pipeline from ~13 FPS to 42.6 FPS end to end over
+    MJPEG (8.7 ms inference latency).
+  - The runtime is now genuinely multi-class: engine-driven output shape,
+    best-class selection, class-aware NMS, per-class overlay colours and
+    per-class event labels.
 
 --------------------------------------------------------------------------------
-3. WHAT IS IN FLIGHT (uncommitted working-tree changes)
+2. THE ARTIFACTS
 --------------------------------------------------------------------------------
-`git status` shows modified, NOT committed:
-  inference/app.py                        (major refactor, +278/-67)
-  inference/annotate/train_pipeline.py    (+ prepare_yolo_dataset, splits,
-                                           --val-ratio/--test-ratio/--no-amp/
-                                           --workers/--plots flags)
-  inference/annotate/preannotate.py       (ensure_cuda_libs hook)
-  inference/annotations/labels/*.txt      (70 re-annotated label files)
-  inference/annotations/predictions.json  (updated pre-annotation results)
+  inference/retrained/best_retrained.pt            22.5 MB  PyTorch source
+  inference/retrained/best_retrained.onnx          44.8 MB  ONNX (opset 12)
+  inference/retrained/best_retrained_int8.engine   13.3 MB  deployed engine
+  inference/retrained/best_retrained_calibration.cache
+  inference/retrained/parity_report.json          engine vs PyTorch vs labels
+  inference/retrained/baseline_parity_report.json  same for the original engine
+  inference/retrained/retrained_int8_benchmark.json
+  inference/retrained/baseline_int8_benchmark.json
+  inference/retrained/retrained_engine_validation.json
+  inference/best_retrained.pt                      deployed copy of the .pt
 
-3.1 app.py refactor (in progress - ONE KNOWN BREAKAGE)
-  a) TRTInference
-     - Pinned (page-locked) host buffers for input/output
-       -> ~2x faster H2D/D2H
-     - close(): frees device buffers and pops the CUDA context so a restart
-       does not hit "Cuda Runtime (out of memory)"
-     - preprocess() / infer_tensor() split out of infer_detections() so the
-       decode+preprocess stage can run on its own thread
-  b) InferenceLoop converted to a THREE-THREAD pipeline
-     - producer : video decode + CPU preprocess -> pre_queue (maxsize 3)
-     - inference: TensorRT + BoxTracker + drawing + JPEG encode
-     - db worker: batches pothole events into SQLite (25 rows or 0.5 s)
-     - JPEG is encoded ONLY while at least one subscriber is connected
-     - add_subscriber() / remove_subscriber() / subscriber_count() /
-       latest_frame() added for the new feed model
-  c) shutdown_inference() + atexit.register(shutdown_inference) added
-  d) KNOWN BREAKAGE (must fix first): the /video-feed route at
-     inference/app.py:567 still calls the REMOVED method
-     `inf.read_frame()` and polls `inf._stop`. It raises AttributeError
-     on first request. The route must be rewritten to use
-     add_subscriber() / remove_subscriber() / latest_frame().
-     The /api/feed/stop and /api/feed/start routes also assume the old
-     single-thread model and need to be reworked to restart/stop the
-     three threads.
-  e) FastAPI shutdown event (app.on_event("shutdown") -> shutdown_inference)
-     is NOT yet added - only the atexit hook exists.
-
-3.2 train_pipeline.py: prepare_yolo_dataset()
-  - Builds a YOLO-standard tree annotations/yolo_dataset/{images,labels}/{train,val,test}
-  - Trains on the ORIGINAL frames/, never export/annotated/ (boxes are
-    drawn on those renders - training on them teaches the model to find boxes)
-  - Stratified split by class signature, seed 42
-  - Produced: annotations/data.yaml, nc=10, 10 class names
-  - Current split: 70 labeled frames -> train/val/test
-
-3.3 Retrained model - CURRENT STATE (weak, needs more epochs)
-  - Training run: inference/runs/detect/poc_full-3 (model=best.pt, 2 epochs,
-    imgsz 640, batch 2, device 0, amp True)
-  - results.csv: epoch 1 -> mAP50 0.00663; epoch 2 -> mAP50 0.00978
-    (mAP50-95 0.00461). Precision 0.551 at epoch 2 but recall 0.009.
-    => 2 epochs on 70 frames is NOT converged; the model is worse than
-    the original best.pt for a production claim. More epochs and more
-    data are required before this can be called a fair comparison.
-  - Copied to: inference/best_retrained.pt (22.5 MB, 2026-10-21 13:51)
-  - NO ONNX and NO INT8 engine exist for it yet.
-
-3.4 Dependencies installed this session
-  - pip install onnx onnxslim  -> SUCCESS
-    onnx-1.23.2, onnxslim-0.1.98, protobuf-7.36.2, ml_dtypes-0.6.0
-    (numpy was upgraded to 2.2.6 by this install - watch for numpy/torch
-     ABI issues in the venv used for training)
+  The .engine/.onnx/.pt binaries are gitignored (reproducible via
+  train_pipeline.py); the JSON measurement reports are committed.
 
 --------------------------------------------------------------------------------
-4. ENVIRONMENT FACTS
+3. HEADLINE NUMBERS
 --------------------------------------------------------------------------------
-  Python venv      : CDAC-pothole/.venv  (python 3.10)
-  tensorrt         : 10.3.0
-  torch            : 2.5.0a0+872d972e41.nv24.08, CUDA available = True
-  ultralytics      : 8.4.142
-  GPU              : Orin (nvgpu), driver 540.4.0
-  nvidia-smi on Tegra reports "Not Supported" for several fields
-  Demo videos      : "demo.mp4" (10 MB) and "demo 60fps.mp4" (147 MB) in
-                     /home/edgeai/Documents/Srikaanth CDAC/
-  Ports            : unified app = 8000 (annotation app previously 8765)
+  Training (50 epochs, 49 train / 14 val / 7 test images, 520 boxes)
+    Precision 0.805 | Recall 0.764 | mAP50 0.849 | mAP50-95 0.390
+    1213 s (20.2 min), 24.3 s/epoch
 
---------------------------------------------------------------------------------
-5. PRIORITISED BACKLOG (from POC_GAP_ANALYSIS.txt, plus this session)
---------------------------------------------------------------------------------
-P0 (Phase 1 client vetting)
-  1. Live sensor fusion loop: GNSS -> detection ROI -> payload -> transmit
-  2. Outbound API bridge to client staging server (POST + retry/backoff + auth)
-  3. Vehicle/camera rig validation on the pilot vehicle
-  4. Hardware-clock timestamps (PTP/NTP/chrony) instead of file mtime
+  Accuracy vs the hand-corrected labels (70 frames, IoU 0.5)
+    PyTorch FP32 (retrained)  mAP50 0.840  P 1.000  R 0.842
+    TensorRT INT8 (retrained) mAP50 0.527  P 1.000  R 0.529   @ conf 0.15
+    PyTorch FP32 (original)   mAP50 0.294  P 1.000  R 0.296
+    TensorRT INT8 (original)  mAP50 0.402  P 1.000  R 0.404   @ conf 0.15
 
-P1 (Phase 2 finalization)
-  5. Thermal (LWIR) capture + RGB/thermal bbox alignment
-  6. Depth/ToF integration -> estimated_depth_cm / estimated_area_sqcm
-  7. Client-feedback retraining run (this is the in-flight item 3.3)
-  8. Thermal hardening: nvpmodel pinning, clock locking, hours-long soak test
-  9. Secure data handoff: TLS client certs, schema versioning, contract test
+    INT8 engine mAP50 peak: 0.644 at conf 0.01-0.02 (precision 1.000)
+    RECOMMENDED OPERATING POINT: conf 0.10 -> mAP50 0.579, P 1.000, R 0.581
+    (the app default is still 0.15 pending a larger independent test set)
 
-P2 (dataset scale/quality)
- 10. Deterministic train/val/test split script   -> DONE in train_pipeline.py
- 11. Dataset cleaning: duplicates, corrupt frames, blur/exposure filters
- 12. Scale collection: 150-200 routes, 25k-50k labeled frames
- 13. Multi-modal collection rig with us-level sync
-
-P3 (performance/ops)
- 14. Pipeline FPS 13 -> ~100.  Three-thread refactor is in progress
-     (this session).  Remaining: dedicated stream + pinned host memory.
- 15. GPU memory lifecycle on shutdown -> DONE in code, needs the
-     FastAPI shutdown event to be wired.
- 16. Unify annotation app onto port 8000 (remove separate 8765 process)
- 17. Dynamic video source: /api/video/set-source + file upload
- 18. Wire gnss.py into app.py so events carry real lat/lng and the GIS map
-     populates
+  Performance on demo.mp4 (692 frames, same machine, same run)
+    Inference only   12.017 ms / 83.21 FPS  (original: 12.525 ms / 79.84)
+    Model-level      9.162 ms / 109.15 FPS  vs PyTorch 38.999 ms / 25.64
+                     => 4.26x speed-up, SoC temperature 51.9 C
+    Live pipeline    42.6 FPS over the wire, 8.7 ms inference latency
 
 --------------------------------------------------------------------------------
-6. IMMEDIATE NEXT ACTIONS (ordered)
+4. WHAT CHANGED IN THE CODE (all committed in 3a7fd92)
 --------------------------------------------------------------------------------
- 1. Rewrite inference/app.py /video-feed (line 567) to the subscriber
-    model:
-       inf.add_subscriber()
-       try:
-           last_seq = -1
-           while True:
-               jpeg, seq = inf.latest_frame()
-               if jpeg is not None and seq != last_seq:
-                   last_seq = seq
-                   yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                          + jpeg + b"\r\n")
-               else:
-                   await asyncio.sleep(0.01)   # non-blocking
-       finally:
-           inf.remove_subscriber()
-    Also rework /api/feed/stop and /api/feed/start for the three-thread
-    loop (stop -> inf.stop(); start -> inf.start() must re-create the
-    threads and reset the capture position, since start() is not idempotent
-    on a stopped loop).
- 2. Add the FastAPI shutdown hook:
-       @app.on_event("shutdown")
-       async def _shutdown():
-           shutdown_inference()
- 3. Export the retrained model to ONNX:
-       .venv/bin/python -c "from ultralytics import YOLO; \
-         YOLO('inference/best_retrained.pt').export(format='onnx', imgsz=640, \
-         opset=12, simplify=True)"
-    (onnx + onnxslim are now installed for the simplify step)
- 4. Build the INT8 TensorRT engine from that ONNX using
-    inference/build_int8_engine.py with --calib-set inference/calib_images
-    (IInt8EntropyCalibrator2).
- 5. Benchmark the new engine with inference/benchmark_model.py and compare
-    against inference/int8_benchmark_results.json and the FP16 numbers.
- 6. Re-run the live pipeline validation and update
-    UNIFIED_PIPELINE_REPORT.txt / POC_GAP_ANALYSIS.txt with the new numbers.
- 7. Commit the working tree (app.py refactor + train_pipeline split +
-    re-annotated labels) once the feed route is fixed and the app boots.
+4.1 inference/app.py
+    - InferenceLoop refactored into three threads: producer (video decode +
+      CPU preprocess -> pre_queue, depth 3), inference (TensorRT + BoxTracker
+      + draw + JPEG encode), db worker (batched SQLite writes, 25 rows or
+      0.5 s).
+    - TRTInference: pinned (page-locked) host buffers; output shape read from
+      the engine instead of hardcoded (1,5,8400) so 1-class and 10-class
+      engines share one path; best-class-per-anchor selection; class-aware
+      NMS; close() frees device buffers and pops the CUDA context.
+    - /video-feed rewritten to the publisher/subscriber model: registers as a
+      subscriber, yields the latest published JPEG when the sequence
+      advances, unregisters on disconnect, and closes the stream once the
+      pipeline is idle so a finished video does not hang the browser.
+    - InferenceLoop.start() is now restartable (tears down the previous run,
+      frees the GPU, rewinds the capture); the status becomes "finished" on
+      EOF.
+    - @app.on_event("shutdown") -> shutdown_inference(), alongside the
+      atexit hook.
+    - CLASS_COLORS: per-class BGR overlay colours; class_id/label carried
+      through the tracker, the overlay and the DB rows.
+
+4.2 inference/annotate/train_pipeline.py
+    - prepare_yolo_dataset(): YOLO-standard images/labels tree with a
+      class-stratified 80/10/10 split (seed 42). Trains on the original
+      frames/, never export/annotated/ (those renders have boxes drawn on
+      them, which teaches the model to find boxes).
+    - build_trt_engine(): INT8 now goes through build_int8_engine.py (the
+      TensorRT Python API with IInt8EntropyCalibrator2). trtexec has no
+      --calib option, so the previous INT8 path could not have worked.
+    - New flags: --val-ratio, --test-ratio, --no-amp, --workers, --plots.
+
+4.3 inference/build_int8_engine.py
+    - Reads the input shape off the parsed network and builds a matching
+      min=opt=max profile (a static ONNX input otherwise fails the build
+      with "static dimensions don't match kMAX dimensions in profile").
+    - --cache option: each model needs its own calibration cache.
+
+4.4 inference/annotate/env_setup.py (new)
+    - ensure_cuda_libs(): re-execs with LD_LIBRARY_PATH set so
+      pip-installed libcudss.so.0 resolves; sets
+      PYTORCH_NVML_BASED_CUDA_CHECK=0 for the Tegra iGPU.
+    - cuda_lib_env(): env dict for spawning subprocesses.
+
+4.5 inference/run_int8_video_trt.py
+    - postprocess() generalised for multi-class output + class-aware NMS, so
+      both engines are measured with identical code.
+
+4.6 inference/validate_engine_parity.py (new)
+    - Compares the engine, its PyTorch source and the ground-truth labels on
+      the same frames: greedy IoU>=0.5 agreement, mAP50/precision/recall for
+      both models, and a confidence threshold sweep.
+    - IMPORTANT: PyTorch and pycuda each own a primary CUDA context and
+      cannot be alternated inside one loop (cuDNN STREAM_MISMATCH /
+      "invalid resource handle"). The script runs one full PyTorch pass and
+      then one full TensorRT pass.
 
 --------------------------------------------------------------------------------
-7. HOW TO RUN / VERIFY
+5. ENVIRONMENT FACTS AND GOTCHAS
 --------------------------------------------------------------------------------
-  # Unified app (dashboard + annotate + train) on port 8000
-  cd CDAC-pothole/inference && ../.venv/bin/python app.py
+  Python venv   : CDAC-pothole/.venv (python 3.10)
+  tensorrt 10.3.0 | torch 2.5.0a0+872d972e41.nv24.08 (CUDA ok) |
+  ultralytics 8.4.142 | onnx 1.23.2 | onnxslim 0.1.98
+  GPU: Orin (nvgpu), driver 540.4.0, nvpmodel MAXN_SUPER
 
-  # INT8 engine build
-  .venv/bin/python inference/build_int8_engine.py --onnx <model>.onnx \
-      --engine <model>_int8.engine --calib-set inference/calib_images
+  a) DEVICE MEMORY CEILING. The Orin Nano shares 7.6 GB of RAM between the
+     desktop and the GPU. A 1536 MB CUDA allocation succeeds, 2048 MB fails,
+     and the failure surfaces as "NVML_SUCCESS == r INTERNAL ASSERT FAILED"
+     because the Tegra driver cannot report a CUDA OOM through NVML. This is
+     why training must run at batch 1. Inference is unaffected.
+  b) The desktop (VS Code, Chromium, gnome-shell) holds ~4.7 GB. Freeing
+     memory before a training run helps.
+  c) Any script that imports torch must go through env_setup.ensure_cuda_libs()
+     and run with PYTORCH_NVML_BASED_CUDA_CHECK=0.
+  d) Demo videos: "demo.mp4" (10 MB) and "demo 60fps.mp4" (147 MB) in
+     /home/edgeai/Documents/Srikaanth CDAC/
+  e) The app binds one GPU engine; the standalone scripts load their own.
+     Do not run both at once.
+  f) demo.mp4 plays once; the feed ends with status "finished" and is
+     restarted via /api/feed/start.
+  g) Never commit secrets; inference/.env.example is the template only.
 
-  # Train -> ONNX -> INT8 in one shot
+--------------------------------------------------------------------------------
+6. HOW TO RUN / VERIFY
+--------------------------------------------------------------------------------
+  # Unified app with the retrained engine
+  cd CDAC-pothole && .venv/bin/python inference/app.py \
+      --engine inference/retrained/best_retrained_int8.engine
+
+  # Reproduce the whole chain (train -> ONNX -> INT8)
   .venv/bin/python inference/annotate/train_pipeline.py \
       --annotations inference/annotations --model inference/best.pt \
-      --epochs 50 --tensorrt --int8 --calib-set inference/calib_images
+      --epochs 50 --batch 1 --workers 0 --run-name poc_retrain_50 \
+      --tensorrt --int8 --calib-set inference/calib_images
 
-  # Engine validation + thermal read
-  .venv/bin/python inference/annotate/validate_engine.py \
-      --engine inference/best_int8.engine
+  # Re-validate the engine against the labels
+  .venv/bin/python inference/validate_engine_parity.py \
+      --model inference/retrained/best_retrained.pt \
+      --engine inference/retrained/best_retrained_int8.engine --sweep
 
-  # Baseline benchmark
-  .venv/bin/python inference/benchmark_model.py --engine inference/best_int8.engine
-
-  IMPORTANT on Jetson: any script that imports torch must go through
-  env_setup.ensure_cuda_libs() (re-exec with the right LD_LIBRARY_PATH) and
-  must run with PYTORCH_NVML_BASED_CUDA_CHECK=0.
+  # Benchmark an engine on demo.mp4
+  .venv/bin/python inference/run_int8_video_trt.py \
+      --engine inference/retrained/best_retrained_int8.engine \
+      --video "/home/edgeai/Documents/Srikaanth CDAC/demo.mp4" --confidence 0.15
 
 --------------------------------------------------------------------------------
-8. KNOWN RISKS / GOTCHAS
+7. WHAT REMAINS (priority ordered)
 --------------------------------------------------------------------------------
-  - numpy was upgraded to 2.2.6 by the onnx install. The training venv
-    used torch 2.5.0a0; verify torch/ultralytics still import and train
-    correctly before trusting the retrained model.
-  - 70 labeled frames / 2 epochs is not a fair retraining result. Report
-    the mAP honestly and state the sample-size caveat.
-  - The unified app binds to one GPU engine; the standalone scripts
-    (run_int8_video_trt.py, display_*.py) load their own engine. Do not
-    run both at once - GPU memory on the Orin Nano is tight.
-  - demo.mp4 plays once (no loop) in the app; the feed stops at the end of
-    the video until /api/feed/start resets CAP_PROP_POS_FRAMES.
-  - Never commit secrets; inference/.env.example is the template only.
+P0 - the single highest-value item is DATA, not code
+  1. Label the 9 non-pothole classes. All 520 boxes in the dataset are
+     class 0. The 10-class head is structurally present and the runtime
+     handles all 10 classes, but the model has learned nothing about
+     cracks, rutting, debris, waterlogging, missing lane markings, edge
+     breaks, manholes or road barriers.
+  2. Scale the dataset: 70 frames of one video is not an evaluation set.
+     Target 25k-50k labelled frames over 150-200 routes.
+  3. Live sensor fusion loop: GNSS -> detection ROI -> payload -> transmit.
+  4. Outbound API bridge to the client staging server (POST + retry/backoff
+     + auth headers).
+  5. Vehicle/camera rig validation on the pilot vehicle.
+  6. Hardware-clock timestamps (PTP/NTP/chrony) instead of file mtime.
+
+P1 - Phase 2 finalization
+  7. Thermal (LWIR) capture + RGB/thermal bbox alignment.
+  8. Depth/ToF integration -> estimated_depth_cm / estimated_area_sqcm.
+  9. Real client-feedback retraining run.
+ 10. Thermal hardening: nvpmodel pinning, clock locking, hours-long soak
+     test, temp/clock/throttle logging.
+ 11. Secure data handoff: TLS client certs, schema versioning, contract test.
+ 12. Quantization-aware training to close the 0.840 -> 0.644 mAP50 INT8 gap.
+
+P2 - performance / operations
+ 13. Remaining pipeline headroom: 8.7 ms inference vs 23.5 ms per frame
+     end to end. The next wins are shared-memory frame passing between
+     threads and a lower JPEG quality / downscaled web feed.
+ 14. Unify the annotation app onto port 8000 (remove the separate 8765
+     process / iframe).
+ 15. Dynamic video source: /api/video/set-source + file upload.
+ 16. Wire gnss.py into app.py so events carry real lat/lng and the GIS map
+     populates.
+ 17. Auto-reload the running engine when a new one is built (Train tab).
+
+--------------------------------------------------------------------------------
+8. DOCUMENTATION SET (project root, all committed)
+--------------------------------------------------------------------------------
+  RETRAINED_MODEL_REPORT.txt        <- this session's main report
+  POC_GAP_ANALYSIS.txt              <- updated with the new status
+  UNIFIED_PIPELINE_REPORT.txt        <- updated with the new pipeline FPS
+  SESSION_SUMMARY_2026-10-21.txt    <- this file
+  POC_STATUS_REPORT.txt, COMPLETE_TECHNICAL_REPORT.txt,
+  FPS_OPTIMIZATION_REPORT.txt, INT8_ENGINE_REPORT.txt,
+  INT8_VS_FP16_COMPARISON_REPORT.txt, ANNOTATION_PIPELINE_REPORT.txt,
+  EO_IR_FUSION_REPORT.txt, SENSOR_INTEGRATION_PLAN.txt,
+  JETSON_RUN_GUIDE.txt, WORK_LOG_2026-10-15.md
 ================================================================================
