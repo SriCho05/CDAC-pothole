@@ -1,0 +1,247 @@
+POC DEVELOPMENT PLAN - IMPLEMENTATION GAP ANALYSIS
+=====================================================
+Date: 2026-10-21
+Repo: github.com/SriCho05/CDAC-pothole
+Device: NVIDIA Jetson Orin Nano, JetPack R36.4.7, CUDA 12.6, TensorRT 10.3.0
+
+Legend: [DONE]  [PARTIAL]  [NOT DONE]
+
+
+=======================================================================
+1. PHASE 1 - PIPELINE VALIDATION AND CLIENT VETTING
+=======================================================================
+
+Requirement                              Status      Notes
+----------------------------------------  ----------  -----------------------------
+Platform integration: mount EO camera +   [PARTIAL]   inference/camera.py has CSI
+edge compute on pilot vehicle                        (nvarguscamerasrc) and USB
+                                                    (V4L2) capture helpers, but
+                                                    no vehicle rig / mounting
+                                                    hardware / live test
+Edge processing: optimized YOLO on       [DONE]      INT8 TensorRT engine, 13 MB.
+embedded compute                                    Verified ~102 FPS pure
+                                                    inference on demo.mp4
+                                                    (692 frames, 9.8 ms/frame).
+                                                    10 classes wired end to end.
+Data fusion: bbox ROI + GPS/timestamp    [PARTIAL]   annotate/schema.py to_payload()
+-> JSON payload                                   emits the EXACT expected JSON.
+                                                    inference/gnss.py parses NMEA
+                                                    GGA/RMC. BUT no live loop
+                                                    wiring GNSS -> detection ->
+                                                    payload -> transmit.
+Client vetting: route payload to         [NOT DONE]  No outbound API bridge.
+staging server for client review                     Only local SQLite + local
+                                                    JSON export exists.
+
+=======================================================================
+2. PHASE 2 - POC FINALIZATION AND HANDOVER
+=======================================================================
+
+Requirement                              Status      Notes
+----------------------------------------  ----------  -----------------------------
+Algorithm finalization: fine-tune        [PARTIAL]   annotate/train_pipeline.py
+TensorRT quantization on client                     supports --tensorrt --int8
+feedback                                             --calib-set and writes
+                                                    best_retrained.pt. Not yet
+                                                    run against real client-
+                                                    labelled data.
+System hardening: thermal / memory       [PARTIAL]   annotate/validate_engine.py
+architecture, no thermal throttling                   reads thermal_zone0 temp.
+                                                    No power-mode pinning, no
+                                                    clock locking, no soak test.
+Data handoff: secure automated API      [NOT DONE]  No client infrastructure
+bridge                                               integration at all.
+
+=======================================================================
+3. EXPECTED OUTPUT PAYLOAD FORMAT
+=======================================================================
+
+Target JSON (from POC plan)              Status      Notes
+----------------------------------------  ----------  -----------------------------
+frame_id                                 [DONE]      schema.py FrameRecord
+timestamp_unix_us                        [DONE]      .to_payload() emits all
+telemetry (lat/lon/alt/speed/heading/     [DONE]      top-level keys verbatim.
+  imu_vibration_g)                        FIELDS     Verified by
+environment (lux/surface/weather)        [DONE]      inference/tests/
+detections[].class                                  check_payload_format.py
+detections[].severity                               and smoke_annotation.py
+detections[].confidence
+detections[].bbox_rgb_xywh              [DONE]
+detections[].bbox_thermal_xywh           [NOT DONE]  Hardcoded to None. No
+                                                       thermal modality captured
+                                                       or aligned yet.
+detections[].estimated_depth_cm          [PARTIAL]   Field exists, but only
+                                                       manually entered. Needs
+                                                       depth cross-reference
+                                                       script.
+detections[].estimated_area_sqcm         [PARTIAL]   Field exists, manual entry
+                                                       only. classes.py has
+                                                       suggest_severity() helper
+                                                       keyed on area.
+
+=======================================================================
+4. TARGET DATASET SIZING AND SPECIFICATIONS
+=======================================================================
+
+Dimension                     Target                       Current        Status
+----------------------------  ---------------------------  -------------  ----------
+Total labeled frames          25,000 - 50,000 multimodal  70 (RGB only)  [NOT DONE]
+Video sequences              150 - 200 routes (1-3 min,  1 sequence      [NOT DONE]
+                                30-60 FPS)                (demo.mp4)
+Class distribution            8 - 12 anomaly classes      10 classes     [DONE]
+                                                              defined in
+                                                              classes.py and
+                                                              NAMES_LIST
+Calibration set              2,000 - 3,000 clean frames  2,500 images   [DONE]
+Storage footprint             Raw + H.265/PNG + JSON      frames/ +      [PARTIAL]
+                                                          labels/ + JSON
+                                                          metadata present,
+                                                          no H.265 video
+                                                          retention
+
+=======================================================================
+5. INFORMATION AND MODALITY MATRIX
+=======================================================================
+
+Modality                    Schema field              Capture / source   Status
+--------------------------  ------------------------  ----------------  ----------
+RGB (daylight 1080p)        bbox_rgb_xywh             cv2 + camera.py   [DONE]
+LWIR / Thermal (640x512)    bbox_thermal_xywh         none              [NOT DONE]
+Depth / ToF                 estimated_depth_cm        manual only       [NOT DONE]
+GPS-GNSS (Lat/Lon/Alt)      latitude/longitude/       gnss.py NMEA      [PARTIAL]
+                              altitude_m                reader exists,
+                                                       not wired live
+9-Axis IMU (Acc/Gyro/Mag)   imu_vibration_g           none              [NOT DONE]
+Platform speed & heading    speed_kmh/heading_deg     none              [NOT DONE]
+Ambient lux level           lux                       none              [NOT DONE]
+Weather & surface state     weather/surface           manual only       [NOT DONE]
+Ground truth timestamp       timestamp_unix_us         file mtime /      [PARTIAL]
+                                                       manual - not sensor
+                                                       hardware time
+
+=======================================================================
+6. MAIN GOALS / DELIVERABLES
+=======================================================================
+
+Deliverable                                              Status
+-------------------------------------------------------  ----------
+Sensor synchronization rig, us timestamps across        [NOT DONE]
+  parallel RGB/LWIR/Depth/GNSS/IMU streams
+Program for edge platform to timestamp parallel streams  [NOT DONE]
+Annotation standard (COCO + JSON + YOLO text)           [DONE]
+  classes.py, schema.py: YOLO writer, JSON payloads,
+  COCO builder with category offset, severity fields
+Software to annotate images with multiple classes       [DONE]
+  annotate.html canvas UI, class/severity/confidence/
+  depth/area/ignore editing, auto-save on navigation
+Collect diverse raw video sequences                    [PARTIAL]
+  preannotate.py video->frames pipeline exists; actual
+  multi-route collection runs not yet performed
+Annotate frames and fuse spatial telemetry into ROI     [PARTIAL]
+  Telemetry/Environment dataclasses + form fields +
+  save_meta endpoint exist; no live GNSS->ROI tagging
+Pre-trained YOLO -> initial boxes -> manual refine      [DONE]
+  preannotate.py + canvas annotator
+Align annotations across visible and thermal channels   [NOT DONE]
+  no thermal channel
+Script: detection box -> cross-reference Depth frame     [NOT DONE]
+  -> physical dimensions -> interpolated GPS
+Baseline edge benchmarking                              [DONE]
+  3 modes measured: 102 FPS pure / 30-50 display /
+  13 FPS whole pipeline. Reports: INT8_VS_FP16_
+  COMPARISON_REPORT.txt, UNIFIED_PIPELINE_REPORT.txt
+Dataset cleaning                                        [PARTIAL]
+  merge_ignore() + write_yolo_label() exist; no dedup,
+  quality-filter, or corrupt-image script
+Calibration                                             [DONE]
+  2,500 calib_images, build_int8_engine.py with
+  IInt8EntropyCalibrator2, --calib-set in train_pipeline
+Dataset partitioning (train/val/test split)             [NOT DONE]
+  no split script exists
+Documentation                                            [DONE]
+  UNIFIED_PIPELINE_REPORT.txt, INT8_VS_FP16_COMPARISON_
+  REPORT.txt, INT8_ENGINE_REPORT.txt, copilot-instructions
+
+=======================================================================
+7. CONSOLIDATED BACKLOG (priority ordered)
+=======================================================================
+
+P0 - Required for Phase 1 client vetting
+  1. Live sensor fusion loop: GNSS read -> detection ROI ->
+     payload -> transmit. (gnss.py + schema.py exist, need the
+     orchestrator that wires them during inference.)
+  2. Outbound API bridge to client staging server: HTTP POST of
+     the POC payload, with retry/backoff and auth headers.
+  3. Vehicle/camera rig validation: run camera.py against the
+     mounted EO camera on the pilot vehicle, confirm live capture
+     and detection latency end to end.
+  4. Sensor timestamp source: replace file mtime with hardware
+     clock (PTP/NTP/chrony) for ground-truth timestamp_unix_us.
+
+P1 - Required for Phase 2 finalization
+  5. Thermal (LWIR) capture + RGB/thermal bbox alignment so
+     bbox_thermal_xywh is populated instead of None.
+  6. Depth/ToF integration: cross-reference detection ROI with
+     depth frame to derive estimated_depth_cm / area_sqcm.
+  7. Client-feedback retraining run: export reviewed dataset ->
+     train_pipeline --tensorrt --int8 --calib-set with the
+     client-approved false-positive tuning.
+  8. Thermal hardening: pin power mode (nvpmodel), lock clocks,
+     run hours-long soak test, log temp/clock/throttle reasons.
+  9. Secure data handoff: TLS client certs / signed payloads,
+     schema versioning and contract test against client spec.
+
+P2 - Dataset scale and quality
+ 10. Dataset partitioning: deterministic train/val/test split
+     script (80/10/10) with stratification by class and route.
+ 11. Dataset cleaning: duplicate/corrupt frame detection, blur and
+     exposure filters, class balance report.
+ 12. Scale collection: 150-200 routes, 25k-50k labeled frames,
+     2k-3k clean calibration frames.
+ 13. Multi-modal collection rig: parallel RGB + LWIR + Depth +
+     GNSS/IMU capture with us-level sync.
+
+P3 - Performance and operations
+ 14. Pipeline FPS: raise ~13 FPS toward model speed (~100 FPS).
+     Async preprocessing thread, skip JPEG when no subscriber,
+     batch SQLite writes, pinned host memory + dedicated stream.
+ 15. GPU memory lifecycle: explicit buffer free + context pop on
+     shutdown to avoid OOM on restart.
+ 16. Unify annotation app onto port 8000 (remove separate 8765
+     process / iframe).
+ 17. Dynamic video source: /api/video/set-source + file upload
+     instead of hardcoded demo.mp4.
+ 18. Wire gnss.py into app.py so pothole events carry real
+     lat/lng instead of 0.0, and the GIS map populates.
+
+=======================================================================
+8. WHAT IS ALREADY WORKING TODAY (verified)
+=======================================================================
+
+- INT8 TensorRT inference, 10 anomaly classes, ~102 FPS pure
+- Unified FastAPI dashboard: live feed, GIS map, saved events with
+  clickable /uploads snapshots, clear-all, stop/start feed
+- BoxTracker with IoU matching: no box trails, no flicker
+- Annotation workspace: canvas UI, YOLO/JSON/COCO export, auto-save
+  on navigation, 70 demo frames pre-annotated (215 detections)
+- Retrain + INT8 engine build pipeline wired to a Train tab
+- GNSS NMEA reader (parse + serial background thread)
+- Payload format exactly matches the POC "Expected Output" spec
+  (except bbox_thermal_xywh, which is null by design)
+- 2,500-image INT8 calibration set
+- Full documentation set, all pushed to GitHub main
+
+=======================================================================
+9. SCORE SUMMARY
+=======================================================================
+
+Area                                       Done / Partial / Not Done
+------------------------------------------  -------------------------
+Phase 1 (validation + client vetting)      1 / 2 / 2
+Phase 2 (finalization + handover)           0 / 2 / 1
+Expected output payload                    8 / 2 / 1
+Dataset sizing and specs                   2 / 2 / 2
+Modality matrix                            1 / 3 / 4
+Main goals and deliverables                5 / 3 / 4
+
+Total across all areas: 17 done, 14 partial, 14 not done.
