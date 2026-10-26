@@ -61,12 +61,14 @@ try:  # packaged import
     from annotate.classes import CLASS_NAMES, SEVERITY_LEVELS  # type: ignore
     from annotate.schema import Detection  # type: ignore
     from annotate.env_setup import cuda_lib_env  # type: ignore
+    from gnss import GnssReader  # type: ignore
 except Exception:  # running directly from inference/
     sys.path.insert(0, str(INFERENCE_DIR))
     from annotate.annotation_app import Workspace, get_workspace  # type: ignore
     from annotate.classes import CLASS_NAMES, SEVERITY_LEVELS  # type: ignore
     from annotate.schema import Detection  # type: ignore
     from annotate.env_setup import cuda_lib_env  # type: ignore
+    from gnss import GnssReader  # type: ignore
 
 
 #: BGR colour per anomaly class, used for the live overlay.
@@ -299,24 +301,32 @@ class InferenceLoop:
     """Three-thread inference pipeline.
 
     producer  : video decode + CPU preprocess -> pre_queue
-    inference : pops preprocessed frames, runs TensorRT, tracks boxes,
-                and JPEG-encodes only while a subscriber is watching
+    inference : pops preprocessed frames, runs TensorRT, tracks boxes
+    encoder   : JPEG-encodes the annotated frames (only while a subscriber
+                is watching) so the encode does not stall the GPU
     db worker : batches pothole events into SQLite off the hot path
 
     Splitting the work this way keeps the GPU fed without the request
     thread paying for decode, preprocess, JPEG encoding and DB writes.
+
+    The encoder is a separate thread on purpose: cv2.imencode of a 640x640
+    frame costs ~8.8 ms, which is nearly as much as the TensorRT inference
+    itself. Left on the inference thread it caps the whole pipeline at
+    ~50 FPS; on its own thread the pipeline is limited by decode+preprocess
+    instead.
     """
 
     PRE_QUEUE_SIZE = 3
     EVENT_BATCH_SIZE = 25
     EVENT_FLUSH_SECONDS = 0.5
 
-    def __init__(self, engine_path, video_path, conf, nms, every=1):
+    def __init__(self, engine_path, video_path, conf, nms, every=1, loop=False):
         self.engine_path = engine_path
         self.video_path = video_path
         self.conf = conf
         self.nms = nms
         self.every = every
+        self.loop = loop
         self.model = None
         self.cap = None
         self.tracker = BoxTracker(ttl=BOX_TTL_FRAMES)
@@ -330,8 +340,10 @@ class InferenceLoop:
         self._subscribers = 0
         self._latest_jpeg = None
         self._latest_seq = 0
+        self._next_seq = 0
         self._pre_queue = queue.Queue(maxsize=self.PRE_QUEUE_SIZE)
         self._event_queue = queue.Queue()
+        self._jpeg_queue = queue.Queue(maxsize=2)
         self._threads: list[threading.Thread] = []
         self._closed = False
 
@@ -355,8 +367,10 @@ class InferenceLoop:
         self._stop = False
         self._pre_queue = queue.Queue(maxsize=self.PRE_QUEUE_SIZE)
         self._event_queue = queue.Queue()
+        self._jpeg_queue = queue.Queue(maxsize=2)
         self._latest_jpeg = None
         self._latest_seq = 0
+        self._next_seq = 0
         self._last_save = 0
         self._t_start = time.perf_counter()
         self._n_frames = 0
@@ -374,6 +388,7 @@ class InferenceLoop:
         self.stats["status"] = "running"
         for target, name in ((self._producer_loop, "producer"),
                              (self._inference_loop, "inference"),
+                             (self._encoder_loop, "encoder"),
                              (self._db_loop, "db")):
             thread = threading.Thread(target=target, name=name, daemon=True)
             thread.start()
@@ -442,6 +457,16 @@ class InferenceLoop:
             except Exception:  # noqa: BLE001
                 break
             if not ok:
+                if self.video_path and self.loop:
+                    # Reopen the clip and start over, so the dashboard keeps
+                    # showing a live feed instead of going idle.
+                    self.cap.release()
+                    self.cap = cv2.VideoCapture(self.video_path)
+                    if not self.cap.isOpened():
+                        with self._lock:
+                            self.stats["status"] = "error"
+                        break
+                    continue
                 if self.video_path:
                     self._stop = True  # plays once, no loop
                     with self._lock:
@@ -486,12 +511,17 @@ class InferenceLoop:
                     self._last_save = now
                     self._event_queue.put((frame, dets))
 
-                # JPEG encode only while someone is watching the feed.
-                jpeg = None
+                # Hand the frame to the encoder thread. JPEG encoding is
+                # ~8.8 ms of CPU; doing it here would stall the GPU for
+                # that long on every frame.
                 if self.subscriber_count() > 0:
-                    ok2, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                    if ok2:
-                        jpeg = buf.tobytes()
+                    with self._lock:
+                        self._next_seq += 1
+                        seq = self._next_seq
+                    try:
+                        self._jpeg_queue.put((frame, seq), timeout=0.2)
+                    except queue.Full:
+                        pass  # encoder is behind; the next frame is newer
 
                 with self._lock:
                     self.stats["frames"] += 1
@@ -505,12 +535,31 @@ class InferenceLoop:
                         self.stats["fps"] = round(self._n_frames / elapsed, 1)
                         self._n_frames = 0
                         self._t_start = time.perf_counter()
-                    if jpeg is not None:
-                        self._latest_jpeg = jpeg
-                        self._latest_seq += 1
             except Exception:  # noqa: BLE001
                 logging.exception("Inference failed")
                 continue
+
+    def _encoder_loop(self):
+        """JPEG-encode annotated frames for the MJPEG feed.
+
+        Runs on its own thread so the ~8.8 ms encode overlaps with the
+        next TensorRT inference instead of delaying it. OpenCV releases
+        the GIL during imencode, so the two really do run in parallel.
+        """
+        while not self._stop:
+            try:
+                frame, seq = self._jpeg_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if not ok:
+                    continue
+                with self._lock:
+                    self._latest_jpeg = buf.tobytes()
+                    self._latest_seq = seq
+            except Exception:  # noqa: BLE001
+                logging.exception("JPEG encode failed")
 
     def _db_loop(self):
         """Batch pothole events into SQLite with a single reused connection."""
@@ -523,9 +572,14 @@ class InferenceLoop:
                     frame, dets = self._event_queue.get(timeout=0.2)
                     snap_url = self._write_snapshot(frame)
                     for d in dets:
+                        # Tag the event with the current GNSS fix. With no
+                        # receiver (or no fix yet) the coordinates stay NULL
+                        # so the map does not place the event at 0,0.
+                        lat, lng = self._current_position()
                         pending.append((d.get("label", "pothole"), d["confidence"],
-                                         0.0, 0.0, snap_url,
-                                         datetime.now(timezone.utc).isoformat()))
+                                         lat, lng,
+                                         datetime.now(timezone.utc).isoformat(),
+                                         snap_url))
                 except queue.Empty:
                     pass
                 except Exception:  # noqa: BLE001
@@ -553,6 +607,16 @@ class InferenceLoop:
                     pass
                 conn.close()
 
+    def _current_position(self):
+        """Return (latitude, longitude) of the latest GNSS fix, or (None, None)."""
+        reader = get_gnss()
+        if reader is None:
+            return None, None
+        pos = reader.snapshot()
+        if pos is None:
+            return None, None
+        return pos.latitude, pos.longitude
+
     def _write_snapshot(self, frame) -> str:
         """Persist an annotated snapshot and return its /uploads URL."""
         import uuid as _uuid
@@ -572,6 +636,65 @@ class InferenceLoop:
 _inference = None
 _inference_lock = threading.Lock()
 
+# ---------------------------------------------------------------------------
+# GNSS
+# ---------------------------------------------------------------------------
+
+_gnss = None
+_gnss_lock = threading.Lock()
+_gnss_checked = False
+
+
+def detect_gnss_port() -> str | None:
+    """Best-effort guess at the serial port a GNSS receiver is on.
+
+    USB receivers show up as /dev/ttyUSB* or /dev/ttyACM*. The first one
+    found is used; if it turns out not to speak NMEA the reader simply
+    never gets a fix and the events are recorded without coordinates.
+    """
+    import glob
+    for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*"):
+        ports = sorted(glob.glob(pattern))
+        if ports:
+            return ports[0]
+    return None
+
+
+def get_gnss() -> GnssReader | None:
+    """Return the shared GNSS reader, or None when no receiver is present."""
+    global _gnss, _gnss_checked
+    with _gnss_lock:
+        if _gnss is not None:
+            return _gnss
+        if _gnss_checked:
+            return None  # already looked, no receiver
+        _gnss_checked = True
+        port = os.getenv("GNSS_PORT", "").strip() or detect_gnss_port()
+        if not port:
+            logging.info("No GNSS port found; events will be recorded without coordinates")
+            return None
+        logging.info("Opening GNSS receiver on %s", port)
+        _gnss = GnssReader(port, baud=int(os.getenv("GNSS_BAUD", "9600")))
+        _gnss.start()
+        return _gnss
+
+
+def gnss_status() -> dict:
+    """Snapshot of the GNSS state, for the dashboard."""
+    reader = get_gnss()
+    if reader is None:
+        return {"available": False, "port": None, "fix": False,
+                "latitude": None, "longitude": None}
+    pos = reader.snapshot()
+    return {
+        "available": True,
+        "port": reader.port,
+        "fix": pos is not None,
+        "latitude": pos.latitude if pos else None,
+        "longitude": pos.longitude if pos else None,
+        "fix_time": pos.timestamp if pos else None,
+    }
+
 
 def get_inference() -> InferenceLoop:
     global _inference
@@ -581,7 +704,8 @@ def get_inference() -> InferenceLoop:
             video = os.getenv("VIDEO_PATH", "/home/edgeai/Documents/Srikaanth CDAC/demo.mp4")
             conf = float(os.getenv("CONFIDENCE", "0.15"))
             nms = float(os.getenv("NMS", "0.30"))
-            _inference = InferenceLoop(engine, video, conf, nms)
+            loop = os.getenv("LOOP_VIDEO", "0") == "1"
+            _inference = InferenceLoop(engine, video, conf, nms, loop=loop)
             _inference.start()
         return _inference
 
@@ -682,7 +806,9 @@ async def video_feed():
                     last_yield = time.perf_counter()
                     yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
                 else:
-                    await asyncio.sleep(0.01)
+                    # 5 ms poll: short enough that the feed keeps up with
+                    # the pipeline, long enough not to spin the event loop.
+                    await asyncio.sleep(0.005)
                     # End the stream once the pipeline is done and idle, so the
                     # browser does not wait forever on a video that has ended.
                     if not inf.running and (time.perf_counter() - last_yield) > 1.0:
@@ -739,6 +865,12 @@ async def local_status():
 @app.get("/health")
 async def health():
     return {"status": "ok", "inference": get_inference().get_stats()}
+
+
+@app.get("/api/gnss")
+async def gnss_state():
+    """Current GNSS state: whether a receiver is present and whether it has a fix."""
+    return gnss_status()
 
 
 if UPLOADS_DIR.exists():
@@ -910,6 +1042,12 @@ def main():
                         help="NMS IoU threshold")
     parser.add_argument("--no-browser", action="store_true",
                         help="Do not open a browser window")
+    parser.add_argument("--gnss-port", default=None,
+                        help="Serial port of the GNSS receiver (e.g. /dev/ttyUSB0). "
+                             "Auto-detected when omitted.")
+    parser.add_argument("--loop", action="store_true",
+                        help="Restart the video when it ends, so the dashboard "
+                             "keeps showing a live feed")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s | %(levelname)s | %(message)s")
@@ -919,6 +1057,9 @@ def main():
         os.environ["VIDEO_PATH"] = args.video
     os.environ["CONFIDENCE"] = str(args.conf)
     os.environ["NMS"] = str(args.nms)
+    if args.gnss_port:
+        os.environ["GNSS_PORT"] = args.gnss_port
+    os.environ["LOOP_VIDEO"] = "1" if args.loop else "0"
 
     import uvicorn
     config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")

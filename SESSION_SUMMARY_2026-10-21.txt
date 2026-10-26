@@ -12,6 +12,11 @@ This file is the state handover for the next session. The retraining /
 quantization / pipeline work described below is DONE, committed and
 validated. What remains is listed in section 7.
 
+NOTE: section 9 is a LATE-DAY ADDITION that is NOT committed - it covers
+the web-UI FPS fix (45.9 -> 73 FPS), the display script thread inversion,
+the swapped timestamp/image_path columns, the GNSS wiring and the --loop
+flag. Read section 9 first.
+
 --------------------------------------------------------------------------------
 1. HEADLINE RESULT OF THIS SESSION
 --------------------------------------------------------------------------------
@@ -205,19 +210,91 @@ P1 - Phase 2 finalization
  12. Quantization-aware training to close the 0.840 -> 0.644 mAP50 INT8 gap.
 
 P2 - performance / operations
- 13. Remaining pipeline headroom: 8.7 ms inference vs 23.5 ms per frame
-     end to end. The next wins are shared-memory frame passing between
-     threads and a lower JPEG quality / downscaled web feed.
+ 13. DONE (late 2026-10-21): the JPEG encoder was the last real bottleneck.
+     See section 9. The remaining headroom is now shared-memory frame
+     passing between threads and a lower JPEG quality / downscaled feed.
  14. Unify the annotation app onto port 8000 (remove the separate 8765
      process / iframe).
  15. Dynamic video source: /api/video/set-source + file upload.
- 16. Wire gnss.py into app.py so events carry real lat/lng and the GIS map
-     populates.
+ 16. DONE (late 2026-10-21): gnss.py is wired into app.py - events carry the
+     live fix or NULL, and the map no longer plots them at 0,0. See
+     section 9. Still needs a hardware test with a receiver attached.
  17. Auto-reload the running engine when a new one is built (Train tab).
 
 --------------------------------------------------------------------------------
-8. DOCUMENTATION SET (project root, all committed)
+9. LATE-DAY UPDATE (2026-10-21, after the handoff above was written)
 --------------------------------------------------------------------------------
+  Everything in this section is WORKING BUT NOT COMMITTED. 5 files are
+  modified in the working tree:
+      inference/app.py
+      inference/display_int8_live.py
+      inference/shell.html
+      RETRAINED_MODEL_REPORT.txt
+      POC_GAP_ANALYSIS.txt
+  (plus inference/potholes.db, migrated - a backup is at
+   /tmp/kilo/potholes.db.bak)
+
+  9.1 THE "80+ FPS" QUESTION WAS A REAL BUG, NOT A MEASUREMENT ARTEFACT
+      The 83 FPS figure was always the headless, inference-only number.
+      The web UI was delivering 45.9 FPS, and the reason was measured
+      stage by stage:
+          decode                 4.0 ms
+          preprocess (CPU)       6.2 ms
+          TensorRT inference    15.0 ms  (isolated; 7-9 ms in the pipeline)
+          box drawing            0.6 ms
+          JPEG encode q80        8.9 ms  <-- nearly as costly as inference
+      cv2.imencode was running on the inference thread, so it was added
+      straight to the GPU time. It now has its own thread (OpenCV releases
+      the GIL during imencode, so the two really do overlap).
+      Result, measured over a real MJPEG client:
+          retrained 10-class : 45.9 -> 73.0 FPS delivered, 80-87 FPS pipeline
+          original 1-class   : 50.2 -> 80.0 FPS delivered, 89 FPS pipeline
+      The consumer poll interval also went from 10 ms to 5 ms.
+
+  9.2 display_int8_live.py: THE THREADS WERE THE WRONG WAY ROUND
+      The GUI was on a worker thread, which made Qt print
+      "QObject::killTimer: Timers cannot be stopped from another thread"
+      at teardown. Inverted: the GUI is on the main thread (where Qt
+      wants it) and the inference runs on a worker. The worker has to
+      push the engine's CUDA context, because pycuda contexts are
+      per-thread - without that the worker gets
+      "Cuda Runtime (invalid resource handle)".
+      The script now prints three separate numbers instead of one
+      misleading wall-clock FPS:
+          pipeline FPS (frames inferred per second)
+          pure TensorRT FPS (1000 / avg infer ms)
+          display FPS (GUI-bound, what you actually see)
+
+  9.3 TWO BUGS FOUND IN THE EVENT PIPELINE
+      a) The potholes table had the snapshot URL in the `timestamp`
+         column and the ISO timestamp in `image_path` - they were
+         swapped for every saved event. The events table therefore
+         showed "Invalid Date" and the snapshot link was broken. The
+         INSERT tuple order was fixed and 904 existing rows migrated
+         (swap done in SQL, so both columns ended up correct).
+      b) Events were written with a hardcoded 0.0/0.0 position, which
+         the map happily plotted at Null Island (0,0) in the Atlantic.
+         They are now NULL when there is no fix, and the map filters
+         0,0 as well as NULL.
+
+  9.4 GNSS IS NOW WIRED IN
+      inference/app.py: get_gnss() opens the receiver (--gnss-port, or
+      auto-detects /dev/ttyUSB* / /dev/ttyACM*), GnssReader reads NMEA on
+      a background thread, and _current_position() stamps every saved
+      event with the live fix. New endpoint GET /api/gnss reports
+      {available, port, fix, latitude, longitude}.
+      No receiver is attached to this box, so the tested behaviour is
+      "no fix -> NULL coordinates -> no map markers". The path with real
+      hardware is still unverified.
+
+  9.5 NEW FLAG
+      --loop restarts the clip when it ends, so the dashboard keeps
+      showing a live feed instead of going idle after 27 s.
+
+--------------------------------------------------------------------------------
+10. DOCUMENTATION SET (project root, all committed)
+--------------------------------------------------------------------------------
+
   RETRAINED_MODEL_REPORT.txt        <- this session's main report
   POC_GAP_ANALYSIS.txt              <- updated with the new status
   UNIFIED_PIPELINE_REPORT.txt        <- updated with the new pipeline FPS

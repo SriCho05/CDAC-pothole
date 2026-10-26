@@ -297,3 +297,12 @@ Change log
             Pipeline refactored to three threads: 13 -> 42.6 FPS
             end to end. Dataset split script done. Multi-class runtime
             done. See RETRAINED_MODEL_REPORT.txt.
+2026-10-21: pipeline refactored to four threads - the JPEG encoder
+            (8.9 ms/frame, nearly as costly as the inference itself) was
+            moved off the inference thread onto its own. Web UI delivery
+            45.9 -> 73 FPS (retrained engine) / 80 FPS (original engine);
+            server pipeline 80-89 FPS. Also fixed a pre-existing bug where
+            the potholes table stored the snapshot URL in the timestamp
+            column and the timestamp in image_path (both were swapped for
+            every saved event), and the GNSS reader is now wired in so
+            events carry a real fix or NULL instead of a hardcoded 0,0.

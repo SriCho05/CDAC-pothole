@@ -188,22 +188,85 @@ Engine vs its own PyTorch source (greedy IoU >= 0.5 matching):
 
 4.3 Live pipeline (unified FastAPI app, inference/app.py)
 
-  The inference loop was refactored into three threads:
+  The inference loop was refactored into four threads:
       producer  : video decode + CPU preprocess -> pre_queue (depth 3)
-      inference : TensorRT + BoxTracker + drawing + JPEG encode
+      inference : TensorRT + BoxTracker + drawing
+      encoder   : JPEG encode of the annotated frames
       db worker : batches pothole events into SQLite (25 rows or 0.5 s)
 
-  Measured over a real MJPEG client connection:
-      213 frames delivered in 5 s        = 42.6 FPS over the wire
-      inference latency                 = 8.7 ms/frame
-      JPEG encoding                     = only while a subscriber is connected
-      subscriber count                  = 1 during, 0 after disconnect
+  The encoder was split out on 2026-10-21. Measured stage costs per frame
+  on this device:
+      decode                 4.0 ms
+      preprocess (CPU)       6.2 ms
+      TensorRT inference    15.0 ms   (isolated; ~7-9 ms in the pipeline)
+      box drawing            0.6 ms
+      JPEG encode q80        8.9 ms
 
-  Before this refactor the whole pipeline ran at ~13 FPS end to end.
+  JPEG encoding was nearly as expensive as the inference itself and used
+  to sit on the inference thread, capping the whole pipeline at ~50 FPS.
+  Moving it to its own thread overlaps the two (OpenCV releases the GIL
+  during imencode) and took the pipeline to ~80-88 FPS.
+
+  Measured over a real MJPEG client connection:
+      retrained 10-class engine : 73 FPS delivered, 80 FPS server pipeline
+      original 1-class engine   : 80 FPS delivered, 89 FPS server pipeline
+      inference latency         = 6.9-15.8 ms/frame
+      JPEG encoding             = only while a subscriber is connected
+      subscriber count          = 1 during, 0 after disconnect
+
+  Before the thread refactor the whole pipeline ran at ~13 FPS end to end;
+  after the three-thread version 42.6 FPS; after the encoder split 73 FPS.
 
 ================================================================================
 5. IMPORTANT CAVEATS
 ================================================================================
+5.0 WHERE THE TRAINING LABELS ACTUALLY CAME FROM
+    This matters more than anything else in this report, because the
+    accuracy numbers above are measured against those labels.
+
+    The 70 frames were extracted from demo.mp4 with `--every 10` (0.4 s
+    apart at 25 FPS) and labelled by preannotate.py, which runs the local
+    YOLO model over them. The result is PSEUDO-LABELS: the model's own
+    detections, not human annotations.
+
+    Verified by comparing the YOLO label files against the stored
+    predictions:
+      - 520/520 boxes match the raw model output exactly (same geometry,
+        same class, to 1e-3 in normalised coordinates)
+      - 310/520 boxes (60 %) carry confidence exactly 1.0 - a reviewer
+        marked those as confirmed in the annotation UI
+      - 210/520 boxes (40 %) still carry the raw model confidence
+        (0.152 - 0.9x) and were never reviewed
+      - 14 boxes had their severity set by a reviewer (level_2/level_3)
+      - 0 boxes were moved, redrawn or deleted by hand: every box in the
+        training set is a model prediction
+      - 0 ignore regions, 0 depth values, 0 area values were entered
+
+    So the training set is roughly 60 % human-confirmed / 40 % unreviewed
+    model output, and 100 % of the geometry is the teacher's.
+
+    What this means for the numbers above:
+      - mAP50 0.849 (PyTorch) and 0.527 (INT8) measure how faithfully the
+        student reproduces the teacher's annotations. They are NOT
+        real-world detection accuracy - the reference is the teacher on
+        the same data.
+      - The engine-vs-PyTorch agreement (93.7 % vs 56.6 %) is the one
+        non-circular measurement here: it compares two artefacts of the
+        same model, so it measures the quantization loss alone.
+      - "The retrained engine beats the original INT8 engine" remains a
+        valid RELATIVE statement on identical data (the student fits the
+        annotated dataset better than the teacher does). It is not
+        evidence that either model detects potholes better in the world.
+
+    Train/val leakage, measured:
+      - 43.6 % of val boxes have a train box with IoU >= 0.5 (the same
+        physical pothole seen in a train frame 0.4 s apart)
+      - no val box has a train box with IoU >= 0.9, and no val frame is a
+        duplicate of a train frame, so the split is not degenerate - but
+        the val mAP50 is inflated by that leakage
+      - the val and test splits come from the same video as train, so
+        neither is an independent test set
+
 5.1 The dataset is 70 frames from a single video (demo.mp4), 520 boxes, all of
     class 0 (pothole). The validation and test splits come from the same
     source video as the training split, so the mAP50 figures above are
@@ -264,7 +327,10 @@ Engine vs its own PyTorch source (greedy IoU >= 0.5 matching):
   - The retrained engine reproduces its PyTorch source with 93.7 % agreement
     versus 56.6 % for the original engine.
   - No performance cost: 83.2 inference FPS vs 79.8 for the original.
-  - The live pipeline was refactored from ~13 FPS to 42.6 FPS over the wire.
+  - The live pipeline was refactored from ~13 FPS to 73 FPS over the wire
+    (80 FPS server-side), by splitting decode, inference, JPEG encoding and
+    DB writes onto four threads. The JPEG encoder was the last bottleneck:
+    at 8.9 ms per frame it was nearly as expensive as the inference itself.
   - The runtime is now genuinely multi-class: engine-driven output shape,
     best-class selection, class-aware NMS, per-class overlay colours and
     per-class event labels.

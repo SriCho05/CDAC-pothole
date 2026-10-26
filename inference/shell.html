@@ -224,7 +224,7 @@ async function refreshEvents() {
     if (!d.potholes.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No events saved.</td></tr>'; return; }
     tbody.innerHTML = d.potholes.map(ev => {
       const t = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '—';
-      const gps = ev.latitude != null ? Number(ev.latitude).toFixed(4) + ', ' + Number(ev.longitude).toFixed(4) : '—';
+      const gps = hasPosition(ev) ? Number(ev.latitude).toFixed(4) + ', ' + Number(ev.longitude).toFixed(4) : '—';
       return `<tr><td>${t}</td><td>${(Number(ev.confidence)*100).toFixed(1)}%</td><td>${gps}</td><td><a href="${ev.image_path}" target="_blank">open</a></td></tr>`;
     }).join('');
   } catch (e) { $('events').innerHTML = `<tr><td colspan="4" class="empty">${e.message}</td></tr>`; }
@@ -237,17 +237,26 @@ function initMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
   $('mapMsg').textContent = 'Map ready.';
 }
+function hasPosition(ev) {
+  if (ev.latitude == null || ev.longitude == null) return false;
+  const la = Number(ev.latitude), lo = Number(ev.longitude);
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) return false;
+  // 0,0 is Null Island, not a road position: an event with no GNSS fix
+  // must not be plotted there.
+  if (la === 0 && lo === 0) return false;
+  return true;
+}
 function updateMap(events) {
   if (!markers) return;
   markers.clearLayers();
-  const pts = events.filter(ev => Number.isFinite(Number(ev.latitude)) && Number.isFinite(Number(ev.longitude)));
+  const pts = events.filter(hasPosition);
   pts.forEach(ev => {
     const m = L.marker([Number(ev.latitude), Number(ev.longitude)]).bindPopup(
-      `<strong>Pothole</strong><br>Conf: ${(Number(ev.confidence)*100).toFixed(1)}%<br>${new Date(ev.timestamp).toLocaleString()}`
+      `<strong>${ev.label || 'Pothole'}</strong><br>Conf: ${(Number(ev.confidence)*100).toFixed(1)}%<br>${new Date(ev.timestamp).toLocaleString()}`
     ).addTo(markers);
   });
   if (pts.length) { map.fitBounds(pts.map(ev => [Number(ev.latitude), Number(ev.longitude)]), {padding:[24,24], maxZoom:17}); $('mapMsg').textContent = pts.length + ' GPS-tagged events mapped.'; }
-  else $('mapMsg').textContent = 'No GPS-tagged events yet.';
+  else $('mapMsg').textContent = events.length ? 'No GPS fix on ' + events.length + ' events yet.' : 'No events yet.';
 }
 
 // ---------- annotate ----------
