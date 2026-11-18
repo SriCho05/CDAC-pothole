@@ -1,0 +1,214 @@
+CDAC Pothole Detection - Chart Index
+=====================================
+
+All charts generated at 300 DPI for IEEE publication.
+Source data from verified Jetson Orin Nano benchmarks (JetPack R36.4.7, CUDA 12.6, TensorRT 10.3.0).
+
+================================================================================
+FIGURE 1: Pipeline Architecture Diagram
+File: 00_pipeline_architecture.png
+Description: Four-thread pipeline architecture (Producer → Inference → Encoder → DB → FastAPI → Browser)
+Shows thread boundaries, queue sizes, and key operations per thread.
+Referenced in paper: Section III.A (System Architecture)
+
+================================================================================
+FIGURE 2: Training mAP50 Progression
+File: 01_training_map50_progression.png
+Description: mAP50 progression over training epochs for retrained 10-class YOLO model
+Shows FP32 baseline (0.849) and training convergence.
+Referenced in paper: Section V.B (Performance Metrics)
+
+================================================================================
+FIGURE 3: Threshold Sweep mAP50 vs Confidence
+File: 02_threshold_sweep_map50.png
+Description: mAP50 vs confidence threshold sweep for INT8 engine
+Shows optimal threshold selection for INT8 quantization recovery.
+Referenced in paper: Section V.B (Performance Metrics)
+
+================================================================================
+FIGURE 4: FP16 vs INT8 Comparison
+File: 03_fp16_vs_int8_comparison.png
+Description: Side-by-side comparison of FP16 vs INT8 precision
+Metrics: latency, detection count, mAP50, model size
+Shows 57% size reduction, 56% latency reduction, -24.1% mAP50 gap.
+Referenced in paper: Section V.B, V.E (Precision Comparison)
+
+================================================================================
+FIGURE 5: INT8 Threshold Tuning Recovery
+File: 04_int8_threshold_tuning.png
+Description: Detection count recovery by lowering INT8 confidence threshold
+Shows 106.7% recovery of FP16 detections at conf=0.15 with zero false positives.
+Referenced in paper: Section V.B, V.E (Precision Comparison)
+
+================================================================================
+FIGURE 6: PyTorch vs TensorRT Latency
+File: 05_pytorch_vs_tensorrt_latency.png
+Description: Latency comparison: PyTorch FP32 vs TensorRT FP16 vs TensorRT INT8
+Shows 9.3 ms (pure TRT INT8) vs 25.4 ms (PyTorch) vs 11.2 ms (TRT INT8 with overhead).
+Referenced in paper: Section V.E (Precision Comparison)
+
+================================================================================
+FIGURE 7: Speedup Factor
+File: 06_speedup_factor.png
+Description: Speedup factor of TensorRT over PyTorch across batch sizes
+Shows INT8 achieves ~2.7x speedup at batch=1, scaling to ~3.2x at batch=8.
+Referenced in paper: Section V.E (Precision Comparison)
+
+================================================================================
+FIGURE 8: Batch Size Scaling
+File: 07_batch_size_scaling.png
+Description: Throughput vs batch size for PyTorch and TensorRT engines
+Shows INT8 maintains advantage across all batch sizes.
+Referenced in paper: Section V.E (Precision Comparison)
+
+================================================================================
+FIGURE 9: Model Size Comparison
+File: 08_model_size_comparison.png
+Description: Model size comparison: PyTorch FP32 (30 MB) vs TensorRT FP16 (15 MB) vs INT8 (13.3 MB)
+Shows 57% reduction from FP32 to INT8.
+Referenced in paper: Section V.E (Precision Comparison)
+
+================================================================================
+FIGURE 10: Inference FPS Comparison
+File: 09_inference_fps_comparison.png
+Description: Inference FPS comparison across precisions and batch sizes
+Shows pure TensorRT INT8 achieving 107 FPS at batch=1.
+Referenced in paper: Section V.D (Pipeline Architecture Comparison)
+
+================================================================================
+FIGURE 11: Video Benchmark - Pipeline Stage Profiling
+File: 10_video_benchmark.png
+Description: Stage-by-stage latency breakdown for retrained engine on demo.mp4
+Stages: Decode (4.0 ms), Preprocess (6.2 ms), Inference (15.0 ms), Draw (0.6 ms), Encode (8.9 ms)
+Critical path: 25.8 ms → theoretical 38.7 FPS, delivered 73 FPS via pipelining.
+Referenced in paper: Section V.C (Stage Profiling), V.D (Pipeline Comparison)
+
+================================================================================
+FIGURE 12: mAP50 FP32 vs INT8
+File: 11_map50_fp32_vs_int8.png
+Description: mAP50 comparison: FP32 (0.849) vs INT8 (0.644) for retrained engine
+Also shows original engine gap: FP32 (0.840) vs INT8 (0.527) = -37% gap.
+Referenced in paper: Section V.B, V.E
+
+================================================================================
+FIGURE 13: Engine vs PyTorch Agreement
+File: 12_engine_pytorch_agreement.png
+Description: Validation parity: TensorRT INT8 engine vs PyTorch FP32 on hold-out set
+Metrics: matches, misses, false positives, IoU distribution, confidence delta
+Target: ≥90% agreement at IoU ≥0.5 (PASSED).
+Referenced in paper: Section V.E, IV.C (Validation)
+
+================================================================================
+FIGURE 14: Display Mode Comparison (Original)
+File: 13_display_mode_comparison.png
+Description: Initial display mode FPS comparison (superseded by verified version)
+Referenced in paper: Superseded by Figure 15/16
+
+================================================================================
+FIGURE 15: Display Mode Comparison (Verified)
+File: 13_display_mode_comparison_verified.png
+Description: Verified display mode FPS with thread counts
+Headless: 21.8 FPS (2 threads)
+OpenCV: 54.6 FPS (3 threads)
+Browser: 85.1 FPS (4 threads)
+Referenced in paper: Section V.D (Pipeline Architecture Comparison)
+
+================================================================================
+FIGURE 16: Browser Dashboard - Original vs Retrained
+File: 14_browser_dashboard_original_vs_retrained.png
+Description: Browser dashboard FPS: original 1-class (80.0 FPS) vs retrained 10-class (73.0 FPS)
+Shows impact of 10-class head on delivered throughput.
+Referenced in paper: Section V.D (Pipeline Architecture Comparison)
+
+================================================================================
+FIGURE 17: Display Mode Final Verified
+File: 15_display_mode_final_verified.png
+Description: Final verified display mode comparison with error bars
+Confirmed across multiple benchmark runs on demo.mp4 (692 frames, 1280x720).
+Referenced in paper: Section V.D (Pipeline Architecture Comparison)
+
+================================================================================
+FIGURE 18: Display Mode with Thread Architecture
+File: 16_display_mode_with_threads.png
+Description: Display mode FPS with thread architecture diagram
+Visualizes how pipeline parallelism (2→3→4 threads) scales throughput
+while inference latency remains constant (~16 ms).
+Referenced in paper: Section V.D (Pipeline Architecture Comparison)
+
+================================================================================
+SUPPLEMENTARY: Pipeline Architecture Generator
+File: create_figure1.py
+Description: Python script to regenerate Figure 1 (pipeline architecture diagram)
+Uses matplotlib with annotated thread boxes, queues, and data flow arrows.
+
+================================================================================
+HARDWARE & SOFTWARE CONFIGURATION (All Benchmarks)
+---------------------------------------------------
+Device: NVIDIA Jetson Orin Nano 8 GB Developer Kit
+JetPack: 6.2 (R36.4.7)
+CUDA: 12.6
+TensorRT: 10.3.0
+cuDNN: 8.9.x
+PyTorch: 2.5.0 (Jetson build)
+Python: 3.10
+OpenCV: 5.0.0
+Ultralytics: 8.x
+
+Power Mode: MAXN_SUPER (nvpmodel -m 2) + jetson_clocks
+GPU Frequency: 1020 MHz (max)
+
+Test Video: demo.mp4 (692 frames, 1280x720, 25 FPS source)
+Engine: best_retrained_int8.engine (13.3 MB, 10 classes, INT8 calibrated with 500 images)
+
+================================================================================
+KEY VERIFIED RESULTS SUMMARY
+-----------------------------
+| Metric                    | Value          |
+|---------------------------|----------------|
+| Headless FPS (2-thread)   | 21.8           |
+| OpenCV FPS (3-thread)     | 54.6           |
+| Browser FPS (4-thread)    | 85.1           |
+| Pure TRT INT8 FPS         | 107            |
+| Inference Latency         | ~16 ms         |
+| JPEG Encode Latency       | ~8.9 ms        |
+| INT8 Engine Size          | 13.3 MB        |
+| mAP50 (FP32)              | 0.849          |
+| mAP50 (INT8)              | 0.644          |
+| Quantization Gap          | -24.1%         |
+| SoC Temperature           | 51.9°C         |
+| Board Power               | ~20 W          |
+| Engine Parity (IoU≥0.5)   | ≥90% (Pass)    |
+
+================================================================================
+FILE NAMING CONVENTION
+----------------------
+00_* : Pipeline architecture (Figure 1)
+01-05_* : Training & quantization analysis (Figures 2-5)
+06-09_* : Precision & performance scaling (Figures 6-9)
+10_* : Stage profiling (Figure 11)
+11_* : mAP50 comparison (Figure 12)
+12_* : Engine validation (Figure 13)
+13-15_* : Display mode comparisons (Figures 14-17)
+16_* : Thread architecture visualization (Figure 18)
+create_figure1.py : Generator script for Figure 1
+
+================================================================================
+GENERATION SCRIPTS (in parent directory)
+----------------------------------------
+generate_charts.py          : Main chart generation (01-12)
+generate_display_mode_chart.py    : Display mode comparison (13)
+generate_display_mode_verified.py : Verified display mode (13, 15)
+generate_final_verified.py  : Final verified (15)
+generate_with_threads.py    : Thread architecture (16)
+generate_browser_comparison.py: Browser original vs retrained (14)
+unified_benchmark.py        : Unified benchmark runner for all modes
+
+All scripts use matplotlib with 300 DPI output.
+Data sourced from JSON benchmark outputs (int8_video_results_trt.json, etc.)
+
+================================================================================
+LAST UPDATED
+------------
+October 2026 - Commit 33e02e6
+CDAC Pothole Detection Project
+Repository: github.com/SriCho05/CDAC-pothole
